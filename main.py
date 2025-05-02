@@ -13,6 +13,7 @@
 import random
 import typing
 
+color = "#ee1111"
 
 # info is called when you create your Battlesnake on play.battlesnake.com
 # and controls your Battlesnake's appearance
@@ -224,5 +225,11 @@ num_to_move = {
 # Start server when `python main.py` is run
 if __name__ == "__main__":
     from server import run_server
+    import sys
 
-    run_server({"info": info, "start": start, "move": move, "end": end})
+    if len(sys.argv) > 1:
+        port = int(sys.argv[2])
+        color = sys.argv[1]
+        run_server({"info": info, "start": start, "move": move, "end": end, "port": port})
+    else:
+        run_server({"info": info, "start": start, "move": move, "end": end})
