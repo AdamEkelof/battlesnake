@@ -1,11 +1,8 @@
-FROM python:3.10.6-slim
+FROM rust:1.63
 
-# Install app
 COPY . /usr/app
 WORKDIR /usr/app
 
-# Install dependencies
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN cargo install --path .
 
-# Run Battlesnake
-CMD [ "python", "main.py" ]
+CMD ["starter-snake-rust"]

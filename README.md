@@ -1,37 +1,27 @@
-# Battlesnake Python Starter Project
+# Battlesnake Rust Starter Project
 
-An official Battlesnake template written in Python. Get started at [play.battlesnake.com](https://play.battlesnake.com).
+An official Battlesnake template written in Rust. Get started at [play.battlesnake.com](https://play.battlesnake.com).
 
-![Battlesnake Logo](https://media.battlesnake.com/social/StarterSnakeGitHubRepos_Python.png)
+![Battlesnake Logo](https://media.battlesnake.com/social/StarterSnakeGitHubRepos_Rust.png)
 
-This project is a great starting point for anyone wanting to program their first Battlesnake in Python. It can be run locally or easily deployed to a cloud provider of your choosing. See the [Battlesnake API Docs](https://docs.battlesnake.com/api) for more detail. 
+This project is a great starting point for anyone wanting to program their first Battlesnake in Rust. It can be run locally or easily deployed to a cloud provider of your choosing. See the [Battlesnake API Docs](https://docs.battlesnake.com/api) for more detail. 
 
-[![Run on Replit](https://repl.it/badge/github/BattlesnakeOfficial/starter-snake-python)](https://replit.com/@Battlesnake/starter-snake-python)
+[![Run on Replit](https://repl.it/badge/github/BattlesnakeOfficial/starter-snake-rust)](https://replit.com/@Battlesnake/starter-snake-rust)
 
 ## Technologies Used
 
-This project uses [Python 3](https://www.python.org/) and [Flask](https://flask.palletsprojects.com/). It also comes with an optional [Dockerfile](https://docs.docker.com/engine/reference/builder/) to help with deployment.
+This project uses [Rust](https://www.rust-lang.org/) and [Rocket](https://rocket.rs). It also comes with an optional [Dockerfile](https://docs.docker.com/engine/reference/builder/) to help with deployment.
 
 ## Run Your Battlesnake
 
-Install dependencies using pip
-
 ```sh
-pip install -r requirements.txt
-```
-
-Start your Battlesnake
-
-```sh
-python main.py
+cargo run
 ```
 
 You should see the following output once it is running
 
 ```sh
-Running your Battlesnake at http://0.0.0.0:8000
- * Serving Flask app 'My Battlesnake'
- * Debug mode: off
+🚀 Rocket has launched from http://0.0.0.0:8000
 ```
 
 Open [localhost:8000](http://localhost:8000) in your browser and you should see
@@ -49,7 +39,7 @@ Install the [Battlesnake CLI](https://github.com/BattlesnakeOfficial/rules/tree/
 Command to run a local game
 
 ```sh
-battlesnake play -W 11 -H 11 --name 'Python Starter Project' --url http://localhost:8000 -g solo --browser
+battlesnake play -W 11 -H 11 --name 'Rust Starter Project' --url http://localhost:8000 -g solo --browser
 ```
 
 ## Next Steps

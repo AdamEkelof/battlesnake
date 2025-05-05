@@ -1,1 +1,0 @@
-battlesnake play --url http://localhost:8000 --url http://localhost:8001 --url http://localhost:8002 --url http://localhost:8003 --name Team1:1 --name Team1:2 --name Team2:1 --name Team2:2 --viewmap
