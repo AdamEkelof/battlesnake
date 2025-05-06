@@ -13,7 +13,7 @@
 use log::info;
 use rand::seq::SliceRandom;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{Battlesnake, Board, Coord, Game};
 
@@ -100,59 +100,61 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake) -> 
     return json!({ "move": chosen });
 }
 
-// This function finds which snake is closest to each point on the map through a flood fill
-// fn flood_fill(_board: &Board) -> Vec<Vec<String>> {
-//     // Skapar en klon för vet inte hur man slipper det på ett bra vis.
-//     let mut snakes = _board.snakes.to_vec();
-//     snakes.sort_by(|a, b| a.length.cmp(&b.length));
-//     let mut queue = Vec::new();
-//     for (i, s) in snakes.iter().enumerate() {
-//         queue.push((i, s.head));
-//     }
-//     let mut visited = vec![vec![false; _board.height as usize]; _board.width as usize];
-//     while let Some(current) = queue.pop() {
-//         let (i, coord) = current;
-//         if visited[coord.x as usize][coord.y as usize] {
-//             continue;
-//         }
-//     }
-// }
-
-fn get_neighbors(x: i32, y: i32, height: i32, width: i32) -> Vec<(i32, i32)> {
+fn get_neighbors(x: i32, y: i32, height: i32, width: i32) -> Vec<Coord> {
     let mut neighbors = Vec::new();
     let directions = [(1, 0), (0, 1), (-1, 0), (0, -1)];
     for (dx, dy) in directions.iter() {
         let nx = x + dx;
         let ny = y + dy;
         if nx > 0 && nx < width && ny > 0 && ny < height {
-            neighbors.push((x, y));
+            neighbors.push(Coord { x: nx, y: ny });
         }
     }
     neighbors
 }
 
-// sker sjukt många string.clone() i den här funktionen, hade varit nice att ta bort.
-fn flood_fill(_board: &Board) -> Vec<Option<String>> {
-    let mut snakes = Vec::new();
-    for s in _board.snakes.iter() {
-        snakes.push((s.id.clone(), s.head.x, s.head.y, s.length));
+impl Hash for Battlesnake {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
-    snakes.sort_by(|a, b| a.3.cmp(&b.3));
-    let width = _board.width as i32;
-    let height = _board.height as i32;
-    let mut visited = vec![None; (height * width) as usize];
-    let mut queue = Vec::new();
-    for s in snakes.iter() {
-        queue.push((s.0.clone(), s.1, s.2))
+}
+
+impl PartialEq for Battlesnake {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
-    while let Some((id, x, y)) = queue.pop() {
-        if visited[(y * height + x) as usize].is_some() {
+}
+
+impl Eq for Battlesnake {}
+
+fn flood_fill(_board: &Board) -> HashMap<&Battlesnake, Vec<Coord>> {
+    let mut mapping = HashMap::new();
+    let mut queue: Vec<(&Battlesnake, Coord)> = _board
+        .snakes
+        .iter()
+        .map(|x| (x, Coord { ..x.head }))
+        .collect();
+    queue.sort_by(|a, b| a.0.length.cmp(&b.0.length));
+    for snake in queue.iter() {
+        mapping.insert(snake.0, Vec::new());
+    }
+    let h = _board.height as i32;
+    let w = _board.width;
+    let mut visited = vec![false; (h * w) as usize];
+    while let Some(snake) = queue.pop() {
+        let x = snake.1.x;
+        let y = snake.1.y;
+        if visited[(y * h + x) as usize] {
             continue;
         }
-        visited[(y * height + x) as usize] = Some(id.clone());
-        for (nx, ny) in get_neighbors(x, y, height, width) {
-            queue.push((id.clone(), nx, ny));
+        visited[(y * h + x) as usize] = true;
+        mapping
+            .get_mut(snake.0)
+            .expect("What snake is this?")
+            .push(Coord { x, y });
+        for neighbor in get_neighbors(x, y, h, w) {
+            queue.push((snake.0, neighbor));
         }
     }
-    visited
+    mapping
 }
