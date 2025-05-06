@@ -109,7 +109,7 @@ fn get_neighbors(x: i32, y: i32, height: i32, width: i32) -> Vec<Coord> {
     for (dx, dy) in directions.iter() {
         let nx = x + dx;
         let ny = y + dy;
-        if nx > 0 && nx < width && ny > 0 && ny < height {
+        if 0 <= nx && nx < width && 0 <= ny && ny < height {
             neighbors.push(Coord { x: nx, y: ny });
         }
     }
@@ -164,11 +164,28 @@ fn flood_fill(_board: &Board) -> HashMap<&Battlesnake, Vec<Coord>> {
     mapping
 }
 
+fn print_flood(mapping: &HashMap<&Battlesnake, Vec<Coord>>) {
+    let mut v = [' '; 121];
+    for (&key, val) in mapping {
+        for pos in val.iter() {
+            v[(pos.y * 11 + pos.x) as usize] = key.id.chars().next().unwrap();
+        }
+        v[(key.head.y * 11 + key.head.x) as usize] =
+            key.id.chars().next().unwrap().to_ascii_lowercase();
+    }
+    for (i, n) in v.iter().enumerate() {
+        print!("{n}");
+        if (i + 1) % 11 == 0 {
+            println!();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{Battlesnake, Board, Coord};
 
-    use super::flood_fill;
+    use super::{flood_fill, print_flood};
 
     impl Battlesnake {
         fn new(id: String, head: (i32, i32), length: i32) -> Self {
@@ -200,9 +217,35 @@ mod tests {
             ],
             hazards: Vec::new(),
         };
+        // a a a a a o o ...
+        // a a a a a o o ...
+        // a a a a o o o ...
+        // a a a o o o o ...
+        // ...
         let hm = flood_fill(&board);
         for (key, val) in &hm {
             println!("{}: {:?}", &key.id, val);
         }
+        print_flood(&hm);
+        let adam = hm
+            .keys()
+            .find(|s| s.id == String::from("Adam"))
+            .expect("Adam does not exist");
+        let oliver = hm
+            .keys()
+            .find(|s| s.id == String::from("Oliver"))
+            .expect("Oliver does not exist");
+        assert!(hm
+            .get(adam)
+            .unwrap()
+            .iter()
+            .find(|&x| x.x == 5 && x.y == 0)
+            .is_some());
+        assert!(hm
+            .get(oliver)
+            .unwrap()
+            .iter()
+            .find(|&x| x.x == 5 && x.y == 2)
+            .is_some());
     }
 }
