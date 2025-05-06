@@ -103,6 +103,12 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake) -> 
     return json!({ "move": chosen });
 }
 
+impl Coord {
+    fn manhattan(&self, other: &Self) -> u32 {
+        ((self.x - other.x).abs() + (self.y - other.y).abs()) as u32
+    }
+}
+
 fn get_neighbors(x: i32, y: i32, height: i32, width: i32) -> Vec<Coord> {
     let mut neighbors = Vec::new();
     let directions = [(1, 0), (0, 1), (-1, 0), (0, -1)];
