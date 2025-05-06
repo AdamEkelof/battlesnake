@@ -13,7 +13,10 @@
 use log::info;
 use rand::seq::SliceRandom;
 use serde_json::{json, Value};
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hash,
+};
 
 use crate::{Battlesnake, Board, Coord, Game};
 
@@ -134,27 +137,72 @@ fn flood_fill(_board: &Board) -> HashMap<&Battlesnake, Vec<Coord>> {
         .iter()
         .map(|x| (x, Coord { ..x.head }))
         .collect();
-    queue.sort_by(|a, b| a.0.length.cmp(&b.0.length));
+    queue.sort_by(|a, b| b.0.length.cmp(&a.0.length));
+    let mut queue = VecDeque::from(queue);
     for snake in queue.iter() {
         mapping.insert(snake.0, Vec::new());
     }
     let h = _board.height as i32;
     let w = _board.width;
     let mut visited = vec![false; (h * w) as usize];
-    while let Some(snake) = queue.pop() {
+    while let Some(snake) = queue.pop_front() {
         let x = snake.1.x;
         let y = snake.1.y;
         if visited[(y * h + x) as usize] {
             continue;
         }
+        // println!("New point in map {},{}", x, y);
         visited[(y * h + x) as usize] = true;
         mapping
             .get_mut(snake.0)
             .expect("What snake is this?")
             .push(Coord { x, y });
         for neighbor in get_neighbors(x, y, h, w) {
-            queue.push((snake.0, neighbor));
+            queue.push_back((snake.0, neighbor));
         }
     }
     mapping
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Battlesnake, Board, Coord};
+
+    use super::flood_fill;
+
+    impl Battlesnake {
+        fn new(id: String, head: (i32, i32), length: i32) -> Self {
+            Battlesnake {
+                id,
+                name: String::new(),
+                health: 100,
+                body: Vec::new(),
+                head: Coord {
+                    x: head.0,
+                    y: head.1,
+                },
+                length,
+                latency: String::new(),
+                shout: None,
+            }
+        }
+    }
+
+    #[test]
+    fn test_flood_fill() {
+        let board = Board {
+            height: 11,
+            width: 11,
+            food: vec![Coord { x: 1, y: 1 }],
+            snakes: vec![
+                Battlesnake::new(String::from("Adam"), (2, 2), 1),
+                Battlesnake::new(String::from("Oliver"), (5, 6), 2),
+            ],
+            hazards: Vec::new(),
+        };
+        let hm = flood_fill(&board);
+        for (key, val) in &hm {
+            println!("{}: {:?}", &key.id, val);
+        }
+    }
 }
