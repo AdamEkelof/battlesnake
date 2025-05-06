@@ -109,6 +109,30 @@ impl Coord {
     }
 }
 
+fn select_played_out<'a>(
+    snake: &Battlesnake,
+    board: &'a Board,
+    depth: u32,
+) -> Vec<&'a Battlesnake> {
+    let mut p_played = Vec::new();
+    for other_snake in board.snakes.iter() {
+        if snake == other_snake {
+            continue;
+        }
+        if snake.head.manhattan(&other_snake.head) <= 2 * depth {
+            p_played.push(other_snake);
+        } else {
+            for part in other_snake.body.iter() {
+                if snake.head.manhattan(part) <= 2 * depth {
+                    p_played.push(other_snake);
+                    break;
+                }
+            }
+        }
+    }
+    p_played
+}
+
 fn get_neighbors(x: i32, y: i32, height: i32, width: i32) -> Vec<Coord> {
     let mut neighbors = Vec::new();
     let directions = [(1, 0), (0, 1), (-1, 0), (0, -1)];
