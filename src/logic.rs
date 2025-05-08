@@ -68,11 +68,15 @@ pub fn get_move(
     }
 
     // Are there any safe moves left?
-    let safe_moves: Vec<_> = get_safe_moves(_board, you);
-    if safe_moves.len() == 0 {
-        info!("MOVE {}: No safe moves", turn);
-        safe_moves = vec!["down"];
-    }
+    let safe_moves: Vec<_> = {
+        let y = get_safe_moves(_board, you);
+        if y.len() == 0 {
+            info!("MOVE {}: No safe moves", turn);
+            vec!["down"]
+        } else {
+            y
+        }
+    };
 
     let teammate_id = game_info.agent_ids[1 - team_idx].clone();
     if let Some(teammate) = _board.snakes.iter().find(|s| s.id == teammate_id) {
@@ -101,16 +105,10 @@ pub fn get_move(
     return json!({ "move": chosen });
 }
 
-fn search(
-    _board: &Board,
-    team_ids: &[String; 2],
-    timeout: u32,
-) -> [String; 2] {
+fn search(_board: &Board, team_ids: &[String; 2], timeout: u32) -> [String; 2] {
     let joint_moves = get_joint_moves(_board, team_ids);
     let mut best_move = ["", ""];
     let mut best_score = 0;
-
-    
 }
 
 fn get_joint_moves(_board: &Board, team_ids: &[String; 2]) -> Vec<[String; 2]> {
@@ -155,7 +153,7 @@ fn get_joint_moves(_board: &Board, team_ids: &[String; 2]) -> Vec<[String; 2]> {
     team_moves_combinations
 }
 
-fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str>  {
+fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str> {
     let mut is_move_safe: HashMap<_, _> = vec![
         ("up", true),
         ("down", true),
@@ -201,10 +199,7 @@ fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str>  {
         .collect()
 }
 
-fn new_position(
-    position: &Coord,
-    m: &str,
-) -> Coord {
+fn new_position(position: &Coord, m: &str) -> Coord {
     let mut new_position = *position;
     if m == "" {
         // No move
