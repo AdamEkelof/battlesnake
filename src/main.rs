@@ -64,7 +64,7 @@ pub struct GameState {
 pub struct GameInfo {
     id: String,
     timeout: u32,
-    agent_ids: Vec<String>,
+    agent_ids: [String; 2],
     agent_moves: [Vec<String>; 2],
 }
 
@@ -83,14 +83,14 @@ fn handle_start(shared_data: &State<SharedData>, start_req: Json<GameState>) -> 
     if data.contains_key(&game_id) {
         // Add agent ID to the existing game info
         if let Some(game_info) = data.get_mut(&start_req.game.id) {
-            game_info.agent_ids.push(you_id.clone());
+            game_info.agent_ids[1] = you_id.clone();
         }
     } else {
         // Create a new game info entry
         let game_info = GameInfo {
             id: game_id.clone(),
             timeout: start_req.game.timeout,
-            agent_ids: vec![you_id.clone()],
+            agent_ids: [you_id.clone(), String::new()],
             agent_moves: [vec![], vec![]],
         };
         data.insert(game_id.clone(), game_info);

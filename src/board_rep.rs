@@ -11,11 +11,12 @@ pub fn move_snake(
     m: &str, // Assumed to be safe and valid
 ) -> Board {
     let mut new_board = board.clone();
-    let snake = new_board
-        .snakes
-        .iter_mut()
-        .find(|s| s.id == id)
-        .expect("Snake not found");
+    let mut snake: Battlesnake;
+    if let Some(s) = new_board.snakes.iter_mut().find(|s| s.id == id) {
+        snake = s.clone();
+    } else {
+        return new_board; // Snake not found, return the board unchanged
+    }
     let head = snake.body[0];
     let mut new_head = head;
 
@@ -44,5 +45,14 @@ pub fn move_snake(
         }
     }
 
+    new_board
+}
+
+pub fn kill_snake(
+    board: &Board,
+    id: &str,
+) -> Board {
+    let mut new_board = board.clone();
+    new_board.snakes.retain(|s| s.id != id);
     new_board
 }

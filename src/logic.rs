@@ -69,11 +69,9 @@ pub fn get_move(
 
     // Are there any safe moves left?
     let safe_moves: Vec<_> = get_safe_moves(_board, you);
-
     if safe_moves.len() == 0 {
         info!("MOVE {}: No safe moves", turn);
-        game_info.agent_moves[team_idx].push("down".to_string());
-        return json!({ "move": "down" });
+        safe_moves = vec!["down"];
     }
 
     let teammate_id = game_info.agent_ids[1 - team_idx].clone();
@@ -103,7 +101,61 @@ pub fn get_move(
     return json!({ "move": chosen });
 }
 
-fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str> {
+fn search(
+    _board: &Board,
+    team_ids: &[String; 2],
+    timeout: u32,
+) -> [String; 2] {
+    let joint_moves = get_joint_moves(_board, team_ids);
+    let mut best_move = ["", ""];
+    let mut best_score = 0;
+
+    
+}
+
+fn get_joint_moves(_board: &Board, team_ids: &[String; 2]) -> Vec<[String; 2]> {
+    let snake_map: HashMap<String, Battlesnake> = _board
+        .snakes
+        .iter()
+        .map(|s| (s.id.clone(), s.clone()))
+        .collect();
+
+    let mut team_moves: Vec<Vec<String>> = vec![Vec::new(); 2];
+    for (i, id) in team_ids.iter().enumerate() {
+        let snake: Battlesnake;
+        if Some(snake) = snake_map.get(id) {
+            snake = snake.clone();
+        } else {
+            team_moves[i] = vec!["down".to_string()]; // Default move
+            continue; // Snake not found, skip to next
+        }
+
+        let safe_moves = get_safe_moves(_board, snake);
+        if safe_moves.len() == 0 {
+            team_moves[i] = vec!["down".to_string()]; // Default move
+            continue; // No safe moves, skip to next
+        }
+        team_moves[i] = safe_moves;
+    }
+
+    let mut team_moves_combinations: Vec<[String; 2]> = Vec::new();
+    for m1 in &team_moves[0] {
+        let s1 = new_position(&team_snakes[0].head, m1);
+        for m2 in &team_moves[1] {
+            let s2 = new_position(&team_snakes[1].head, m2);
+            if s1.x == s2.x && s1.y == s2.y {
+                continue;
+            }
+            let mut move_pair = ["", ""];
+            move_pair[0] = m1.clone();
+            move_pair[1] = m2.clone();
+            team_moves_combinations.push(move_pair);
+        }
+    }
+    team_moves_combinations
+}
+
+fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str>  {
     let mut is_move_safe: HashMap<_, _> = vec![
         ("up", true),
         ("down", true),
@@ -149,6 +201,25 @@ fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str> {
         .collect()
 }
 
+fn new_position(
+    position: &Coord,
+    m: &str,
+) -> Coord {
+    let mut new_position = *position;
+    if m == "" {
+        // No move
+    } else if m == "up" {
+        new_position.y += 1;
+    } else if m == "down" {
+        new_position.y -= 1;
+    } else if m == "left" {
+        new_position.x -= 1;
+    } else if m == "right" {
+        new_position.x += 1;
+    }
+    new_position
+}
+
 fn out_of_bounds(poistion: &Coord, board: &Board, m: &str) -> bool {
     if m == "up" {
         return poistion.y == board.height as i32 - 1;
@@ -163,18 +234,8 @@ fn out_of_bounds(poistion: &Coord, board: &Board, m: &str) -> bool {
 }
 
 fn collision_with_body(position: &Coord, body: &[Coord], m: &str) -> bool {
-    let mut next_position: Coord = *position;
-    if m == "" {
-        // No move
-    } else if m == "up" {
-        next_position.y += 1;
-    } else if m == "down" {
-        next_position.y -= 1;
-    } else if m == "left" {
-        next_position.x -= 1;
-    } else if m == "right" {
-        next_position.x += 1;
-    }
+    let mut next_position: Coord = new_position(position, m);
+
     for part in body.iter() {
         if part.x == next_position.x && part.y == next_position.y {
             return true;
@@ -184,16 +245,8 @@ fn collision_with_body(position: &Coord, body: &[Coord], m: &str) -> bool {
 }
 
 fn collision_with_snakes(position: &Coord, board: &Board, id: String, m: &str) -> bool {
-    let mut next_position: Coord = *position;
-    if m == "up" {
-        next_position.y += 1;
-    } else if m == "down" {
-        next_position.y -= 1;
-    } else if m == "left" {
-        next_position.x -= 1;
-    } else if m == "right" {
-        next_position.x += 1;
-    }
+    let mut next_position: Coord = new_position(position, m);
+
     for snake in board.snakes.iter() {
         if snake.id == id {
             continue;
