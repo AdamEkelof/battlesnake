@@ -105,6 +105,70 @@ pub fn get_move(
     return json!({ "move": chosen });
 }
 
+#[derive(Debug, Clone)]
+struct SimpleBoard {
+    food: Vec<Coord>,
+    snakes: Vec<SimpleSnake>,
+}
+impl SimpleBoard {
+    fn from(board: &Board) -> Self {
+        // TODO: select our team snakes and send that info to create SimpleSnake
+        let snakes = board
+            .snakes
+            .iter()
+            .map(|s| SimpleSnake::from(s, true))
+            .collect();
+        SimpleBoard {
+            food: board.food.clone(),
+            snakes,
+        }
+    }
+    fn evaluate_board(&self) -> Vec<usize> {
+        let mut v = Vec::new();
+        v.push(0);
+        v.push(0);
+        for snake in self.snakes.iter() {
+            if snake.our_team {
+                v[0] += snake.evaluate_value();
+            } else {
+                v[1] += snake.evaluate_value();
+            }
+        }
+        v
+    }
+    // This could be using team instead of index and then do the combined moves
+    fn simulate_move(&self, idx: usize) -> Vec<Self> {
+        let snake = self.snakes.get(idx).expect("bad index of snake");
+        // TODO: make get_safe_moves work with simple classes instead maybe
+        let moves = get_safe_moves(self, snake);
+        let mut simulations = Vec::new();
+        for m in moves.iter() {
+            simulations.add(self.clone());
+            let board: SimpleBoard = simulations.last_mut().unwrap();
+            // Apply the move to the board...
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SimpleSnake {
+    our_team: bool,
+    health: usize,
+    body: Vec<Coord>,
+}
+impl SimpleSnake {
+    fn from(snake: &Battlesnake, our_team: bool) -> Self {
+        SimpleSnake {
+            our_team,
+            health: snake.health.clone() as usize,
+            body: snake.body.clone(),
+        }
+    }
+    fn evaluate_value(&self) -> usize {
+        self.body.len() * self.health
+    }
+}
+
 fn search(_board: &Board, team_ids: &[String; 2], timeout: u32) -> [String; 2] {
     let joint_moves = get_joint_moves(_board, team_ids);
     let mut best_move = ["", ""];
