@@ -18,7 +18,7 @@ use std::{
     hash::Hash,
 };
 
-use crate::{Battlesnake, Board, Coord, Game};
+use crate::{Battlesnake, Board, Coord, Game, GameInfo};
 
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
@@ -37,6 +37,8 @@ pub fn info() -> Value {
 
 // start is called when your Battlesnake begins a game
 pub fn start(_game: &Game, _turn: &i32, _board: &Board, _you: &Battlesnake) {
+    // create team mate pairs
+    // store timeout
     info!("GAME START");
 }
 
@@ -48,7 +50,17 @@ pub fn end(_game: &Game, _turn: &i32, _board: &Board, _you: &Battlesnake) {
 // move is called on every turn and returns your next move
 // Valid moves are "up", "down", "left", or "right"
 // See https://docs.battlesnake.com/api/example-move for available data
-pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake) -> Value {
+pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake, game_info: &mut GameInfo) -> Value {
+    let my_id = you.id.clone();
+    let team_idx = game_info
+        .agent_ids
+        .iter()
+        .position(|x| x == &my_id)
+        .expect("Agent ID not found");
+    if game_info.agent_moves[team_idx].len() == *turn as usize + 1 {
+        return json!({ "move": game_info.agent_moves[team_idx][*turn as usize] });
+    }
+
     let mut is_move_safe: HashMap<_, _> = vec![
         ("up", true),
         ("down", true),
@@ -91,6 +103,9 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake) -> 
     // let food = &board.food;
 
     info!("MOVE {}: {}", turn, chosen);
+    game_info.agent_moves[team_idx].push(chosen.to_string());
+    // store down for team mate
+    game_info.agent_moves[1 - team_idx].push("down".to_string());
     return json!({ "move": chosen });
 }
 

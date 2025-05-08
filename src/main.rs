@@ -9,8 +9,12 @@ use serde::Serialize;
 use serde_json::{Value};
 use std::collections::HashMap;
 use std::env;
+use rocket::{get, launch, routes, State};
+use std::sync::{Arc, Mutex};
 
 mod logic;
+
+type SharedData = Arc<Mutex<HashMap<String, GameInfo>>>;
 
 // API and Response Objects
 // See https://docs.battlesnake.com/api
@@ -57,13 +61,40 @@ pub struct GameState {
     you: Battlesnake,
 }
 
+pub struct GameInfo {
+    id: String,
+    timeout: u32,
+    agent_ids: Vec<String>,
+    agent_moves: [Vec<String>; 2],
+}
+
 #[get("/")]
 fn handle_index() -> Json<Value> {
     Json(logic::info())
 }
 
 #[post("/start", format = "json", data = "<start_req>")]
-fn handle_start(start_req: Json<GameState>) -> Status {
+fn handle_start(shared_data: &State<SharedData>, start_req: Json<GameState>) -> Status {
+    // Store game information in shared data
+    let mut data = shared_data.lock().unwrap();
+    // Check if the game ID already exists
+    let game_id = start_req.game.id.clone();
+    let you_id = start_req.you.id.clone();
+    if data.contains_key(&game_id) {
+        // Add agent ID to the existing game info
+        if let Some(game_info) = data.get_mut(&start_req.game.id) {
+            game_info.agent_ids.push(you_id.clone());
+        }
+    } else {
+        // Create a new game info entry
+        let game_info = GameInfo {
+            id: game_id.clone(),
+            timeout: start_req.game.timeout,
+            agent_ids: vec![you_id.clone()],
+            agent_moves: [vec![], vec![]],
+        };
+        data.insert(game_id.clone(), game_info);
+    }
     logic::start(
         &start_req.game,
         &start_req.turn,
@@ -75,19 +106,26 @@ fn handle_start(start_req: Json<GameState>) -> Status {
 }
 
 #[post("/move", format = "json", data = "<move_req>")]
-fn handle_move(move_req: Json<GameState>) -> Json<Value> {
+fn handle_move(shared_data: &State<SharedData>, move_req: Json<GameState>) -> Json<Value> {
+    // Retrieve game information from shared data
+    let mut data = shared_data.lock().unwrap();
+    let game_id = move_req.game.id.clone();
+    let game_info = data.get_mut(&game_id).unwrap_or_else(|| {
+        panic!("Game ID {} not found in shared data", game_id)
+    });
     let response = logic::get_move(
         &move_req.game,
         &move_req.turn,
         &move_req.board,
         &move_req.you,
+        game_info
     );
 
     Json(response)
 }
 
 #[post("/end", format = "json", data = "<end_req>")]
-fn handle_end(end_req: Json<GameState>) -> Status {
+fn handle_end(_shared_data: &State<SharedData>, end_req: Json<GameState>) -> Status {
     logic::end(&end_req.game, &end_req.turn, &end_req.board, &end_req.you);
 
     Status::Ok
@@ -111,6 +149,8 @@ fn rocket() -> _ {
     env_logger::init();
 
     info!("Starting Battlesnake Server...");
+    let initial_data: HashMap<String, GameInfo> = HashMap::new();
+    let shared_data = Arc::new(Mutex::new(initial_data));
 
     rocket::build()
         .attach(AdHoc::on_response("Server ID Middleware", |_, res| {
@@ -118,6 +158,7 @@ fn rocket() -> _ {
                 res.set_raw_header("Server", "battlesnake/github/starter-snake-rust");
             })
         }))
+        .manage(shared_data)
         .mount(
             "/",
             routes![handle_index, handle_start, handle_move, handle_end],
