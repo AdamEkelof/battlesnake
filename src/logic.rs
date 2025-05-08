@@ -15,7 +15,7 @@ use rand::seq::SliceRandom;
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
-    hash::Hash,
+    hash::{Hash, Hasher},
 };
 
 use crate::{Battlesnake, Board, Coord, Game, GameInfo};
@@ -50,7 +50,13 @@ pub fn end(_game: &Game, _turn: &i32, _board: &Board, _you: &Battlesnake) {
 // move is called on every turn and returns your next move
 // Valid moves are "up", "down", "left", or "right"
 // See https://docs.battlesnake.com/api/example-move for available data
-pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake, game_info: &mut GameInfo) -> Value {
+pub fn get_move(
+    _game: &Game,
+    turn: &i32,
+    _board: &Board,
+    you: &Battlesnake,
+    game_info: &mut GameInfo,
+) -> Value {
     let my_id = you.id.clone();
     let team_idx = game_info
         .agent_ids
@@ -70,16 +76,17 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake, gam
         return json!({ "move": "down" });
     }
 
-    let teammate_id = game_info
-        .agent_ids[1 - team_idx]
-        .clone();
+    let teammate_id = game_info.agent_ids[1 - team_idx].clone();
     if let Some(teammate) = _board.snakes.iter().find(|s| s.id == teammate_id) {
         let teammate_moves: Vec<_> = get_safe_moves(_board, teammate);
         if teammate_moves.len() == 0 {
             info!("MOVE {}: No safe moves for teammate", turn);
         } else {
             let teammate_choice = teammate_moves.choose(&mut rand::thread_rng()).unwrap();
-            info!("MOVE {}: Teammate chooses {} from {:?}", turn, teammate_choice, teammate_moves);
+            info!(
+                "MOVE {}: Teammate chooses {} from {:?}",
+                turn, teammate_choice, teammate_moves
+            );
             game_info.agent_moves[1 - team_idx].push(teammate_choice.to_string());
         }
     }
@@ -96,10 +103,7 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake, gam
     return json!({ "move": chosen });
 }
 
-fn get_safe_moves<'a>(
-    board: &'a Board,
-    you: &'a Battlesnake,
-) -> Vec<&'a str>  {
+fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str> {
     let mut is_move_safe: HashMap<_, _> = vec![
         ("up", true),
         ("down", true),
@@ -130,10 +134,11 @@ fn get_safe_moves<'a>(
         if !is_move_safe[m] {
             continue;
         }
-        is_move_safe.insert(m, 
-            !out_of_bounds(my_head, board, m) &&
-            !collision_with_body(my_head, &you.body[1..you.body.len() - 1], m) &&
-            !collision_with_snakes(my_head, board, you.id.clone(), m)
+        is_move_safe.insert(
+            m,
+            !out_of_bounds(my_head, board, m)
+                && !collision_with_body(my_head, &you.body[1..you.body.len() - 1], m)
+                && !collision_with_snakes(my_head, board, you.id.clone(), m),
         );
     }
 
@@ -157,11 +162,7 @@ fn out_of_bounds(poistion: &Coord, board: &Board, m: &str) -> bool {
     return false;
 }
 
-fn collision_with_body(
-    position: &Coord,
-    body: &[Coord],
-    m: &str,
-) -> bool {
+fn collision_with_body(position: &Coord, body: &[Coord], m: &str) -> bool {
     let mut next_position: Coord = *position;
     if m == "" {
         // No move
@@ -182,12 +183,7 @@ fn collision_with_body(
     return false;
 }
 
-fn collision_with_snakes(
-    position: &Coord,
-    board: &Board,
-    id: String,
-    m: &str,
-) -> bool {
+fn collision_with_snakes(position: &Coord, board: &Board, id: String, m: &str) -> bool {
     let mut next_position: Coord = *position;
     if m == "up" {
         next_position.y += 1;
@@ -252,9 +248,30 @@ fn get_neighbors(x: i32, y: i32, height: i32, width: i32) -> Vec<Coord> {
     neighbors
 }
 
+impl Hash for Board {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for food in self.food.iter() {
+            food.hash(state);
+        }
+        for snake in self.snakes.iter() {
+            snake.hash(state);
+        }
+    }
+}
+
+impl Hash for Coord {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.x.hash(state);
+        self.y.hash(state);
+    }
+}
+
 impl Hash for Battlesnake {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
+        for part in self.body.iter() {
+            part.hash(state);
+        }
     }
 }
 
