@@ -61,6 +61,45 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake, gam
         return json!({ "move": game_info.agent_moves[team_idx][*turn as usize] });
     }
 
+    // Are there any safe moves left?
+    let safe_moves: Vec<_> = get_safe_moves(_board, you);
+
+    if safe_moves.len() == 0 {
+        info!("MOVE {}: No safe moves", turn);
+        game_info.agent_moves[team_idx].push("down".to_string());
+        return json!({ "move": "down" });
+    }
+
+    let teammate_id = game_info
+        .agent_ids[1 - team_idx]
+        .clone();
+    if let Some(teammate) = _board.snakes.iter().find(|s| s.id == teammate_id) {
+        let teammate_moves: Vec<_> = get_safe_moves(_board, teammate);
+        if teammate_moves.len() == 0 {
+            info!("MOVE {}: No safe moves for teammate", turn);
+        } else {
+            let teammate_choice = teammate_moves.choose(&mut rand::thread_rng()).unwrap();
+            info!("MOVE {}: Teammate chooses {} from {:?}", turn, teammate_choice, teammate_moves);
+            game_info.agent_moves[1 - team_idx].push(teammate_choice.to_string());
+        }
+    }
+
+    // Choose a random move from the safe ones
+    let chosen = safe_moves.choose(&mut rand::thread_rng()).unwrap();
+
+    // TODO: Implement search
+    // Needed: Board representation for each step in search
+
+    info!("MOVE {}: {}", turn, chosen);
+    game_info.agent_moves[team_idx].push(chosen.to_string());
+    // store down for team mate
+    return json!({ "move": chosen });
+}
+
+fn get_safe_moves<'a>(
+    board: &'a Board,
+    you: &'a Battlesnake,
+) -> Vec<&'a str>  {
     let mut is_move_safe: HashMap<_, _> = vec![
         ("up", true),
         ("down", true),
@@ -70,9 +109,8 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake, gam
     .into_iter()
     .collect();
 
-    // We've included code to prevent your Battlesnake from moving backwards
-    let my_head = &you.body[0]; // Coordinates of your head
-    let my_neck = &you.body[1]; // Coordinates of your "neck"
+    let my_head = &you.body[0];
+    let my_neck = &you.body[1];
 
     if my_neck.x < my_head.x {
         // Neck is left of head, don't move left
@@ -88,65 +126,22 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake, gam
         is_move_safe.insert("up", false);
     }
 
-    // Are there any safe moves left?
-    let safe_moves: Vec<_> = get_safe_moves(&is_move_safe, _board, you);
-
-    if safe_moves.len() == 0 {
-        info!("MOVE {}: No safe moves", turn);
-        return json!({ "move": "down" });
+    for m in is_move_safe.clone().keys() {
+        if !is_move_safe[m] {
+            continue;
+        }
+        is_move_safe.insert(m, 
+            !out_of_bounds(my_head, board, m) &&
+            !collision_with_body(my_head, &you.body[1..you.body.len() - 1], m) &&
+            !collision_with_snakes(my_head, board, you.id.clone(), m)
+        );
     }
 
-    // Choose a random move from the safe ones
-    let chosen = safe_moves.choose(&mut rand::thread_rng()).unwrap();
-
-    // TODO: Implement search
-    // Needed: Board representation for each step in search
-
-    info!("MOVE {}: {}", turn, chosen);
-    game_info.agent_moves[team_idx].push(chosen.to_string());
-    // store down for team mate
-    game_info.agent_moves[1 - team_idx].push("down".to_string());
-    return json!({ "move": chosen });
-}
-
-fn get_safe_moves<'a>(
-    is_move_safe: &'a HashMap<&'a str, bool>,
-    board: &'a Board,
-    you: &'a Battlesnake,
-) -> Vec<&'a str>  {
-    let mut safe_moves: Vec<&str> = is_move_safe
+    is_move_safe
         .iter()
-        .filter(|&(_, v)| *v)
+        .filter(|(_, &v)| v)
         .map(|(k, _)| *k)
-        .collect();
-    let my_head = &you.body[0];
-
-    for m in safe_moves.clone() {
-        if out_of_bounds(my_head, board, m) {
-            safe_moves.retain(|&x| x != m);
-        }
-    }
-
-    if safe_moves.len() == 0 {
-        return vec![];
-    }
-
-    for m in safe_moves.clone() {
-        if collision_with_body(my_head, &you.body[1..you.body.len() - 1], m) {
-            safe_moves.retain(|&x| x != m);
-        }
-    }
-
-    if safe_moves.len() == 0 {
-        return vec![];
-    }
-
-    for m in safe_moves.clone() {
-        if collision_with_snakes(my_head, board, you.id.clone(), m) {
-            safe_moves.retain(|&x| x != m);
-        }
-    }
-    safe_moves
+        .collect()
 }
 
 fn out_of_bounds(poistion: &Coord, board: &Board, m: &str) -> bool {
