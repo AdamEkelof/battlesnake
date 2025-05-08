@@ -30,8 +30,8 @@ pub fn info() -> Value {
         "apiversion": "1",
         "author": "Group 18", // TODO: Your Battlesnake Username
         "color": "#e83d84", // TODO: Choose color
-        "head": "default", // TODO: Choose head
-        "tail": "default", // TODO: Choose tail
+        "head": "tiger-king", // TODO: Choose head
+        "tail": "coffee", // TODO: Choose tail
     });
 }
 
@@ -99,8 +99,8 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake, gam
     // Choose a random move from the safe ones
     let chosen = safe_moves.choose(&mut rand::thread_rng()).unwrap();
 
-    // TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
-    // let food = &board.food;
+    // TODO: Implement search
+    // Needed: Board representation for each step in search
 
     info!("MOVE {}: {}", turn, chosen);
     game_info.agent_moves[team_idx].push(chosen.to_string());
@@ -151,7 +151,7 @@ fn get_safe_moves<'a>(
 
 fn out_of_bounds(poistion: &Coord, board: &Board, m: &str) -> bool {
     if m == "up" {
-        return poistion.y == (board.height - 1) as i32;
+        return poistion.y == board.height as i32 - 1;
     } else if m == "down" {
         return poistion.y == 0;
     } else if m == "left" {
