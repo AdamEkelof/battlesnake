@@ -28,8 +28,8 @@ pub fn info() -> Value {
 
     return json!({
         "apiversion": "1",
-        "author": "", // TODO: Your Battlesnake Username
-        "color": "#888888", // TODO: Choose color
+        "author": "Group 18", // TODO: Your Battlesnake Username
+        "color": "#e83d84", // TODO: Choose color
         "head": "default", // TODO: Choose head
         "tail": "default", // TODO: Choose tail
     });
@@ -76,22 +76,13 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake) -> 
         is_move_safe.insert("up", false);
     }
 
-    // TODO: Step 1 - Prevent your Battlesnake from moving out of bounds
-    // let board_width = &board.width;
-    // let board_height = &board.height;
-
-    // TODO: Step 2 - Prevent your Battlesnake from colliding with itself
-    // let my_body = &you.body;
-
-    // TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
-    // let opponents = &board.snakes;
-
     // Are there any safe moves left?
-    let safe_moves = is_move_safe
-        .into_iter()
-        .filter(|&(_, v)| v)
-        .map(|(k, _)| k)
-        .collect::<Vec<_>>();
+    let safe_moves: Vec<_> = get_safe_moves(&is_move_safe, _board, you);
+
+    if safe_moves.len() == 0 {
+        info!("MOVE {}: No safe moves", turn);
+        return json!({ "move": "down" });
+    }
 
     // Choose a random move from the safe ones
     let chosen = safe_moves.choose(&mut rand::thread_rng()).unwrap();
@@ -101,6 +92,111 @@ pub fn get_move(_game: &Game, turn: &i32, _board: &Board, you: &Battlesnake) -> 
 
     info!("MOVE {}: {}", turn, chosen);
     return json!({ "move": chosen });
+}
+
+fn get_safe_moves<'a>(
+    is_move_safe: &'a HashMap<&'a str, bool>,
+    board: &'a Board,
+    you: &'a Battlesnake,
+) -> Vec<&'a str>  {
+    let mut safe_moves: Vec<&str> = is_move_safe
+        .iter()
+        .filter(|&(_, v)| *v)
+        .map(|(k, _)| *k)
+        .collect();
+    let my_head = &you.body[0];
+
+    for m in safe_moves.clone() {
+        if out_of_bounds(my_head, board, m) {
+            safe_moves.retain(|&x| x != m);
+        }
+    }
+
+    if safe_moves.len() == 0 {
+        return vec![];
+    }
+
+    for m in safe_moves.clone() {
+        if collision_with_body(my_head, &you.body[1..you.body.len() - 1], m) {
+            safe_moves.retain(|&x| x != m);
+        }
+    }
+
+    if safe_moves.len() == 0 {
+        return vec![];
+    }
+
+    for m in safe_moves.clone() {
+        if collision_with_snakes(my_head, board, you.id.clone(), m) {
+            safe_moves.retain(|&x| x != m);
+        }
+    }
+    safe_moves
+}
+
+fn out_of_bounds(poistion: &Coord, board: &Board, m: &str) -> bool {
+    if m == "up" {
+        return poistion.y == (board.height - 1) as i32;
+    } else if m == "down" {
+        return poistion.y == 0;
+    } else if m == "left" {
+        return poistion.x == 0;
+    } else if m == "right" {
+        return poistion.x == board.width - 1;
+    }
+    return false;
+}
+
+fn collision_with_body(
+    position: &Coord,
+    body: &[Coord],
+    m: &str,
+) -> bool {
+    let mut next_position: Coord = *position;
+    if m == "" {
+        // No move
+    } else if m == "up" {
+        next_position.y += 1;
+    } else if m == "down" {
+        next_position.y -= 1;
+    } else if m == "left" {
+        next_position.x -= 1;
+    } else if m == "right" {
+        next_position.x += 1;
+    }
+    for part in body.iter() {
+        if part.x == next_position.x && part.y == next_position.y {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn collision_with_snakes(
+    position: &Coord,
+    board: &Board,
+    id: String,
+    m: &str,
+) -> bool {
+    let mut next_position: Coord = *position;
+    if m == "up" {
+        next_position.y += 1;
+    } else if m == "down" {
+        next_position.y -= 1;
+    } else if m == "left" {
+        next_position.x -= 1;
+    } else if m == "right" {
+        next_position.x += 1;
+    }
+    for snake in board.snakes.iter() {
+        if snake.id == id {
+            continue;
+        }
+        if collision_with_body(&next_position, &snake.body[..snake.body.len() - 1], "") {
+            return true;
+        }
+    }
+    return false;
 }
 
 impl Coord {
