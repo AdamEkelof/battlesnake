@@ -69,7 +69,16 @@ pub fn get_move(
         return json!({ "move": game_info.agent_moves[team_idx][*turn as usize] });
     }
 
-    let temp_ids: [String; 2] = ["".to_string(), "".to_string()];
+    let mut temp_ids: [String; 2] = ["".to_string(), "".to_string()];
+    let enemy_ids: Vec<String> = game_info
+        .agent_ids
+        .iter()
+        .filter(|&x| !game_info.agent_ids.contains(&x))
+        .cloned()
+        .collect();
+    for (i, id) in enemy_ids.iter().enumerate() {
+        temp_ids[i] = id.clone();
+    }
 
     let moves = search(_board, &game_info.agent_ids, &temp_ids, game_info.timeout);
     for i in 0..2 {
@@ -225,6 +234,8 @@ fn out_of_bounds(poistion: &Coord, board: &Board, m: &str) -> bool {
 
 fn collision_with_body(position: &Coord, body: &[Coord], m: &str) -> bool {
     let next_position: Coord = new_position(position, m);
+
+    //info!("Checking collision {} ({}) with body: {:?}", position, m, body);
 
     for part in body.iter() {
         if part.x == next_position.x && part.y == next_position.y {

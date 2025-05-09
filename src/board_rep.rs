@@ -41,7 +41,7 @@ pub fn move_snake(
         }
     }
 
-    info!("Board after move: {}", new_board);
+    //info!("Board after move: {}", new_board);
 
     new_board
 }
@@ -49,21 +49,25 @@ pub fn move_snake(
 pub fn check_deaths(board: &Board, full_turn: bool) -> Board {
     let mut new_board = board.clone();
 
+    if new_board.snakes.len() < 2 {
+        return new_board; // No deaths to check
+    }
+
     // Check for head-on-head collisions
     for (i, snake) in board.snakes[..board.snakes.len() - 1].iter().enumerate() {
         for other_snake in board.snakes[i+1..].iter() {
-            info!("Checking head-on-head collision between {} and {}: {} {}", snake.id, other_snake.id, snake.body[0], other_snake.body[0]);
+            //info!("Checking head-on-head collision between {} and {}: {} {}", snake.id, other_snake.id, snake.body[0], other_snake.body[0]);
             if snake.body[0] == other_snake.body[0] {
                 if snake.length > other_snake.length {
                     new_board.snakes.retain(|s| s.id != other_snake.id);
-                    info!("Snake {} died in head-on-head collision", other_snake.id);
+                    //info!("Snake {} died in head-on-head collision", other_snake.id);
                 } else if snake.length < other_snake.length {
                     new_board.snakes.retain(|s| s.id != snake.id);
-                    info!("Snake {} died in head-on-head collision", snake.id);
+                    //info!("Snake {} died in head-on-head collision", snake.id);
                 } else {
                     // Both snakes die
                     new_board.snakes.retain(|s| s.id != snake.id && s.id != other_snake.id);
-                    info!("Both snakes died in head-on-head collision");
+                    //info!("Both snakes died in head-on-head collision");
                 }
             }
         }
