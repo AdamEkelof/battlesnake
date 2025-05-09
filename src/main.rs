@@ -13,6 +13,8 @@ use rocket::{get, launch, routes, State};
 use std::sync::{Arc, Mutex};
 
 mod logic;
+mod board_rep;
+mod mm_search;
 
 type SharedData = Arc<Mutex<HashMap<String, GameInfo>>>;
 
@@ -35,6 +37,37 @@ pub struct Board {
     hazards: Vec<Coord>,
 }
 
+impl std::fmt::Display for Board {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        /* build board representation string */
+        let mut board: String = "\n|:---------:|".to_owned();
+        for y in (0..self.height).rev() {
+            board += "\n|";
+            for x in 0..self.width {
+                let coord = Coord { x: x as i32, y: y as i32 };
+                let piece: String = if self.food.contains(&coord) {
+                    "f".to_string()
+                } else if self.hazards.contains(&coord) {
+                    "b".to_string()
+                } else if let Some(snake) = self.snakes.iter().find(|s| s.body.contains(&coord)) {
+                    if snake.body[0] == coord {
+                        "h".to_string()
+                    } else {
+                        "s".to_string()
+                    }
+                } else {
+                    " ".to_string()
+                };
+                board += &piece;
+            }
+            board += "|";
+        }
+        board += "\n|:---------:|";
+
+        write!(f, "{}", board)
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Battlesnake {
     id: String,
@@ -47,10 +80,16 @@ pub struct Battlesnake {
     shout: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Copy)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Coord {
     x: i32,
     y: i32,
+}
+
+impl std::fmt::Display for Coord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug)]

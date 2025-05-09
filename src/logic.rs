@@ -20,6 +20,8 @@ use std::{
 
 use crate::{Battlesnake, Board, Coord, Game, GameInfo};
 
+use crate::mm_search::search;
+
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
 // TIP: If you open your Battlesnake URL in a browser you should see this data
@@ -67,46 +69,22 @@ pub fn get_move(
         return json!({ "move": game_info.agent_moves[team_idx][*turn as usize] });
     }
 
-    // Are there any safe moves left?
-    let safe_moves: Vec<_> = {
-        let y = get_safe_moves(_board, you);
-        if y.len() == 0 {
-            info!("MOVE {}: No safe moves", turn);
-            vec!["down"]
-        } else {
-            y
-        }
-    };
+    let temp_ids: [String; 2] = ["".to_string(), "".to_string()];
 
-    let teammate_id = game_info.agent_ids[1 - team_idx].clone();
-    if let Some(teammate) = _board.snakes.iter().find(|s| s.id == teammate_id) {
-        let teammate_moves: Vec<_> = get_safe_moves(_board, teammate);
-        if teammate_moves.len() == 0 {
-            info!("MOVE {}: No safe moves for teammate", turn);
-        } else {
-            let teammate_choice = teammate_moves.choose(&mut rand::thread_rng()).unwrap();
-            info!(
-                "MOVE {}: Teammate chooses {} from {:?}",
-                turn, teammate_choice, teammate_moves
-            );
-            game_info.agent_moves[1 - team_idx].push(teammate_choice.to_string());
-        }
+    let moves = search(_board, &game_info.agent_ids, &temp_ids, game_info.timeout);
+    for i in 0..2 {
+        game_info.agent_moves[i].push(moves[i].clone());
     }
 
-    // Choose a random move from the safe ones
-    let chosen = safe_moves.choose(&mut rand::thread_rng()).unwrap();
 
-    // TODO: Implement search
-    // Needed: Board representation for each step in search
-
+    let chosen = moves[team_idx].clone();
     info!("MOVE {}: {}", turn, chosen);
-    game_info.agent_moves[team_idx].push(chosen.to_string());
     // store down for team mate
     return json!({ "move": chosen });
 }
-
+/*
 #[derive(Debug, Clone)]
-struct SimpleBoard {
+pub struct SimpleBoard {
     food: Vec<Coord>,
     snakes: Vec<SimpleSnake>,
 }
@@ -168,57 +146,9 @@ impl SimpleSnake {
     fn evaluate_value(&self) -> usize {
         self.body.len() * self.health
     }
-}
+}*/
 
-fn search(_board: &Board, team_ids: &[String; 2], timeout: u32) -> [String; 2] {
-    let joint_moves = get_joint_moves(_board, team_ids);
-    let mut best_move = ["", ""];
-    let mut best_score = 0;
-}
-
-fn get_joint_moves(_board: &Board, team_ids: &[String; 2]) -> Vec<[String; 2]> {
-    let snake_map: HashMap<String, Battlesnake> = _board
-        .snakes
-        .iter()
-        .map(|s| (s.id.clone(), s.clone()))
-        .collect();
-
-    let mut team_moves: Vec<Vec<String>> = vec![Vec::new(); 2];
-    for (i, id) in team_ids.iter().enumerate() {
-        let snake: Battlesnake;
-        if let Some(s) = snake_map.get(id) {
-            snake = s.clone();
-        } else {
-            team_moves[i] = vec!["down".to_string()]; // Default move
-            continue; // Snake not found, skip to next
-        }
-
-        let safe_moves = get_safe_moves(_board, &snake);
-        if safe_moves.len() == 0 {
-            team_moves[i] = vec!["down".to_string()]; // Default move
-            continue; // No safe moves, skip to next
-        }
-        team_moves[i] = safe_moves;
-    }
-
-    let mut team_moves_combinations: Vec<[String; 2]> = Vec::new();
-    for m1 in &team_moves[0] {
-        let s1 = new_position(&team_snakes[0].head, m1);
-        for m2 in &team_moves[1] {
-            let s2 = new_position(&team_snakes[1].head, m2);
-            if s1.x == s2.x && s1.y == s2.y {
-                continue;
-            }
-            let mut move_pair = ["", ""];
-            move_pair[0] = m1.clone();
-            move_pair[1] = m2.clone();
-            team_moves_combinations.push(move_pair);
-        }
-    }
-    team_moves_combinations
-}
-
-fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str> {
+pub fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str> {
     let mut is_move_safe: HashMap<_, _> = vec![
         ("up", true),
         ("down", true),
@@ -252,7 +182,7 @@ fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str> {
         is_move_safe.insert(
             m,
             !out_of_bounds(my_head, board, m)
-                && !collision_with_body(my_head, &you.body[1..you.body.len() - 1], m)
+                && !collision_with_body(my_head, &you.body[2..you.body.len() - 1], m)
                 && !collision_with_snakes(my_head, board, you.id.clone(), m),
         );
     }
@@ -294,7 +224,7 @@ fn out_of_bounds(poistion: &Coord, board: &Board, m: &str) -> bool {
 }
 
 fn collision_with_body(position: &Coord, body: &[Coord], m: &str) -> bool {
-    let mut next_position: Coord = new_position(position, m);
+    let next_position: Coord = new_position(position, m);
 
     for part in body.iter() {
         if part.x == next_position.x && part.y == next_position.y {
@@ -305,13 +235,13 @@ fn collision_with_body(position: &Coord, body: &[Coord], m: &str) -> bool {
 }
 
 fn collision_with_snakes(position: &Coord, board: &Board, id: String, m: &str) -> bool {
-    let mut next_position: Coord = new_position(position, m);
+    let next_position: Coord = new_position(position, m);
 
     for snake in board.snakes.iter() {
         if snake.id == id {
             continue;
         }
-        if collision_with_body(&next_position, &snake.body[..snake.body.len() - 1], "") {
+        if collision_with_body(&next_position, &snake.body[1..snake.body.len() - 1], "") {
             return true;
         }
     }
