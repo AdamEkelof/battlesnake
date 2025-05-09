@@ -147,6 +147,7 @@ impl SimpleBoard {
             let board: SimpleBoard = simulations.last_mut().unwrap();
             // Apply the move to the board...
         }
+        simulations
     }
 }
 
@@ -185,14 +186,14 @@ fn get_joint_moves(_board: &Board, team_ids: &[String; 2]) -> Vec<[String; 2]> {
     let mut team_moves: Vec<Vec<String>> = vec![Vec::new(); 2];
     for (i, id) in team_ids.iter().enumerate() {
         let snake: Battlesnake;
-        if Some(snake) = snake_map.get(id) {
-            snake = snake.clone();
+        if let Some(s) = snake_map.get(id) {
+            snake = s.clone();
         } else {
             team_moves[i] = vec!["down".to_string()]; // Default move
             continue; // Snake not found, skip to next
         }
 
-        let safe_moves = get_safe_moves(_board, snake);
+        let safe_moves = get_safe_moves(_board, &snake);
         if safe_moves.len() == 0 {
             team_moves[i] = vec!["down".to_string()]; // Default move
             continue; // No safe moves, skip to next
