@@ -1,5 +1,9 @@
-use crate::Board;
+use std::fmt::Display;
+use rocket::yansi::Paint;
+use crate::{Battlesnake, Board, Coord};
+use crate::logic::get_safe_moves;
 
+#[derive(Clone)]
 enum Movement {
     Up,
     Down,
@@ -10,14 +14,16 @@ impl Movement {
     fn all() -> Vec<Movement> {
         vec![Self::Up, Self::Down, Self::Left, Self::Right]
     }
-
-    fn to_str(&self) -> String {
-        match self {
-            Self::Up => String::from("up"),
-            Self::Down => String::from("down"),
-            Self::Left => String::from("left"),
-            Self::Right => String::from("right"),
-        }
+}
+impl Display for Movement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Movement::Up => String::from("up"),
+            Movement::Down => String::from("down"),
+            Movement::Left => String::from("left"),
+            Movement::Right => String::from("right"),
+        };
+        write!(f, "{}", str)
     }
 }
 
@@ -53,18 +59,28 @@ impl SimpleBoard {
         v
     }
     // This could be using team instead of index and then do the combined moves
-    fn simulate_move(&self, idx: usize) -> Vec<(Move, Self)> {
+    fn simulate_move(&self, our_team: bool) -> Vec<(Movement, Self)> {
+        let mut moves = Vec::new();
+        for snake in self.snakes.iter() {
+            moves.push(get_safe_moves(self, snake));
+        }
+        cartesian_move(moves[0], moves[1]);
         let snake = self.snakes.get(idx).expect("bad index of snake");
         // TODO: make get_safe_moves work with simple classes instead maybe
         let moves = get_safe_moves(self, snake);
         let mut simulations = Vec::new();
         for m in moves.iter() {
-            simulations.add(self.clone());
-            let board: SimpleBoard = simulations.last_mut().unwrap();
+            simulations.push((m.clone(), self.clone()));
+            let board = simulations.last_mut().unwrap();
             // Apply the move to the board...
         }
         simulations
     }
+}
+
+// Galenskap hehe
+fn cartesian_move<'a>(v1: &'a[Movement], v2: &'a[Movement]) -> impl Iterator<Item = (&'a Movement, &'a Movement)> + 'a {
+    v1.iter().flat_map(move |m| std::iter::repeat(m).zip(v2))
 }
 
 #[derive(Debug, Clone)]

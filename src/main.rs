@@ -6,7 +6,7 @@ use rocket::fairing::AdHoc;
 use rocket::http::Status;
 use rocket::serde::{json::Json, Deserialize};
 use serde::Serialize;
-use serde_json::{Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
 use rocket::{get, launch, routes, State};
@@ -14,7 +14,6 @@ use std::sync::{Arc, Mutex};
 
 mod logic;
 mod board_rep;
-mod mm_search;
 
 type SharedData = Arc<Mutex<HashMap<String, GameInfo>>>;
 

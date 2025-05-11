@@ -10,6 +10,9 @@
 // To get you started we've included code to prevent your Battlesnake from moving backwards.
 // For more info see docs.battlesnake.com
 
+mod simple;
+mod mm_search;
+
 use log::info;
 use rand::seq::SliceRandom;
 use serde_json::{json, Value};
@@ -20,7 +23,7 @@ use std::{
 
 use crate::{Battlesnake, Board, Coord, Game, GameInfo};
 
-use crate::mm_search::search;
+use mm_search::search;
 
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
@@ -91,71 +94,6 @@ pub fn get_move(
     // store down for team mate
     return json!({ "move": chosen });
 }
-/*
-#[derive(Debug, Clone)]
-pub struct SimpleBoard {
-    food: Vec<Coord>,
-    snakes: Vec<SimpleSnake>,
-}
-impl SimpleBoard {
-    fn from(board: &Board) -> Self {
-        // TODO: select our team snakes and send that info to create SimpleSnake
-        let snakes = board
-            .snakes
-            .iter()
-            .map(|s| SimpleSnake::from(s, true))
-            .collect();
-        SimpleBoard {
-            food: board.food.clone(),
-            snakes,
-        }
-    }
-    fn evaluate_board(&self) -> Vec<usize> {
-        let mut v = Vec::new();
-        v.push(0);
-        v.push(0);
-        for snake in self.snakes.iter() {
-            if snake.our_team {
-                v[0] += snake.evaluate_value();
-            } else {
-                v[1] += snake.evaluate_value();
-            }
-        }
-        v
-    }
-    // This could be using team instead of index and then do the combined moves
-    fn simulate_move(&self, idx: usize) -> Vec<Self> {
-        let snake = self.snakes.get(idx).expect("bad index of snake");
-        // TODO: make get_safe_moves work with simple classes instead maybe
-        let moves = get_safe_moves(self, snake);
-        let mut simulations = Vec::new();
-        for m in moves.iter() {
-            simulations.add(self.clone());
-            let board: SimpleBoard = simulations.last_mut().unwrap();
-            // Apply the move to the board...
-        }
-        simulations
-    }
-}
-
-#[derive(Debug, Clone)]
-struct SimpleSnake {
-    our_team: bool,
-    health: usize,
-    body: Vec<Coord>,
-}
-impl SimpleSnake {
-    fn from(snake: &Battlesnake, our_team: bool) -> Self {
-        SimpleSnake {
-            our_team,
-            health: snake.health.clone() as usize,
-            body: snake.body.clone(),
-        }
-    }
-    fn evaluate_value(&self) -> usize {
-        self.body.len() * self.health
-    }
-}*/
 
 pub fn get_safe_moves<'a>(board: &'a Board, you: &'a Battlesnake) -> Vec<&'a str> {
     let mut is_move_safe: HashMap<_, _> = vec![

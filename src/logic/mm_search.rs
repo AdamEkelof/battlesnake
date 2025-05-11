@@ -1,5 +1,5 @@
 use crate::{Battlesnake, Board, Coord};
-use crate::logic::get_safe_moves;
+use crate::logic::{flood_fill, get_safe_moves};
 use std::{
     collections::HashMap,
     convert::TryInto,
@@ -149,10 +149,12 @@ fn heuristic(_board: &Board, team_ids: &[String; 2], enemy_ids: &[String; 2]) ->
     if _board.snakes.len() == 0 {
         return 0; // No snakes on the board (tie)
     }
+    let ff = flood_fill(_board);
     let mut value = 0;
     let mut no_team_snakes = true;
     for id in team_ids {
         if let Some(snake) = _board.snakes.iter().find(|s| s.id == *id) {
+            let flood = ff.get(snake);
             value += snake.length;
             if snake.health < 50 {
                 value -= 1; // Penalize for low health
