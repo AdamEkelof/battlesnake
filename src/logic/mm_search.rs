@@ -31,7 +31,8 @@ pub fn search(_board: &Board, team_ids: &[String; 2], enemy_ids: &[String; 2], t
             false,
             best_value,
             i32::MAX,
-            20,
+            5,
+            15,
             timeout as i32,
         );
         best_value = best_value.max(value);
@@ -62,10 +63,11 @@ fn minimax(
     mut alpha: i32,
     mut beta: i32,
     return_time: i32,
+    heuristic_time: i32,
     timeout: i32,
 ) -> i32 {
     let start = Instant::now();
-    if depth == 100 || return_time * depth >= timeout {
+    if depth == 100 || heuristic_time + return_time >= timeout {
         return heuristic(_board, team_ids, enemy_ids);
     }
 
@@ -108,8 +110,8 @@ fn minimax(
     let mut best_value = if is_maximizing { i32::MIN } else { i32::MAX };
 
     for (m_idx, move_pair) in joint_moves.iter().enumerate() {
-        let time_left: i32 = timeout - start.elapsed().as_millis() as i32;
-        if time_left <= return_time * depth {
+        let time_left: i32 = timeout - start.elapsed().as_millis() as i32 - return_time;
+        if time_left <= 0 {
             info!("Ran out of time at depth {}", depth);
             return best_value;
         }
@@ -125,6 +127,7 @@ fn minimax(
             alpha,
             beta,
             return_time,
+            heuristic_time,
             time_per_move,
         );
         if is_maximizing {

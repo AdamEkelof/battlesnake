@@ -68,7 +68,7 @@ impl SimpleBoard {
         let snake = self.snakes.get(idx).expect("bad index of snake");
         // TODO: make get_safe_moves work with simple classes instead maybe
         let moves = get_safe_moves(self, snake);
-        let mut simulations = Vec::new();
+        let mut simulations: Vec<(Movement, SimpleBoard)> = Vec::new();
         for m in moves.iter() {
             simulations.push((m.clone(), self.clone()));
             let board = simulations.last_mut().unwrap();
@@ -127,7 +127,7 @@ fn inner_search(
     }
     let mut values = Vec::new();
     for (_, new_board) in board.simulate_move(our_team).iter() {
-        values.add(inner_search(new_board, depth + 1, alpha, beta, !our_team));
+        values.push(inner_search(new_board, depth + 1, alpha, beta, !our_team));
     }
     match our_team {
         true => values.iter().max_by(|a, b| a[0].cmp(&b[0])),
