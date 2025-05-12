@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 use rocket::yansi::Paint;
 use crate::{Battlesnake, Board, Coord};
-use crate::logic::get_safe_moves;
+use crate::logic::{collision_with_body, collision_with_snakes, get_safe_moves, out_of_bounds};
 
 #[derive(Clone)]
 enum Movement {
@@ -28,18 +29,12 @@ impl Display for Movement {
 }
 
 #[derive(Debug, Clone)]
-struct SimpleBoard {
-    food: Vec<Coord>,
-    snakes: Vec<SimpleSnake>,
+pub struct SimpleBoard {
+    pub food: Vec<Coord>,
+    pub snakes: Vec<SimpleSnake>,
 }
 impl SimpleBoard {
-    fn from(board: &Board) -> Self {
-        // TODO: select our team snakes and send that info to create SimpleSnake
-        let snakes = board
-            .snakes
-            .iter()
-            .map(|s| SimpleSnake::from(s, true))
-            .collect();
+    pub fn from(board: &Board, snakes: Vec<SimpleSnake>) -> Self {
         SimpleBoard {
             food: board.food.clone(),
             snakes,
@@ -61,12 +56,12 @@ impl SimpleBoard {
     // This could be using team instead of index and then do the combined moves
     fn simulate_move(&self, our_team: bool) -> Vec<(Movement, Self)> {
         let mut moves = Vec::new();
-        for snake in self.snakes.iter() {
-            moves.push(get_safe_moves(self, snake));
+        for snake in self.snakes.iter().filter(|s| s.our_team == our_team) {
+            moves.push(snake.get_safe_moves(self));
         }
-        cartesian_move(moves[0], moves[1]);
+        let team_moves: Vec<(&Movement, &Movement)> = cartesian_move(&moves[0], &moves[1]).collect();
+        
         let snake = self.snakes.get(idx).expect("bad index of snake");
-        // TODO: make get_safe_moves work with simple classes instead maybe
         let moves = get_safe_moves(self, snake);
         let mut simulations: Vec<(Movement, SimpleBoard)> = Vec::new();
         for m in moves.iter() {
@@ -84,13 +79,13 @@ fn cartesian_move<'a>(v1: &'a[Movement], v2: &'a[Movement]) -> impl Iterator<Ite
 }
 
 #[derive(Debug, Clone)]
-struct SimpleSnake {
+pub struct SimpleSnake {
     our_team: bool,
     health: usize,
     body: Vec<Coord>,
 }
 impl SimpleSnake {
-    fn from(snake: &Battlesnake, our_team: bool) -> Self {
+    pub fn from(snake: &Battlesnake, our_team: bool) -> Self {
         SimpleSnake {
             our_team,
             health: snake.health.clone() as usize,
@@ -100,7 +95,67 @@ impl SimpleSnake {
     fn evaluate_value(&self) -> usize {
         self.body.len() * self.health
     }
+
+    fn get_safe_moves(&self, simple_board: &SimpleBoard) -> Vec<Movement> {
+        let mut m_v = Movement::all();
+        let head = &self.body[0];
+        let neck = &self.body[1];
+        if neck.x < head.x  {
+            let idx = m_v.iter().position(|m| matches!(m, Movement::Left)).unwrap();
+            m_v.remove(idx);
+        }
+        if neck.x > head.x  {
+            let idx = m_v.iter().position(|m| matches!(m, Movement::Right)).unwrap();
+            m_v.remove(idx);
+        }
+        if neck.y < head.y  {
+            let idx = m_v.iter().position(|m| matches!(m, Movement::Down)).unwrap();
+            m_v.remove(idx);
+        }
+        if neck.y > head.y  {
+            let idx = m_v.iter().position(|m| matches!(m, Movement::Up)).unwrap();
+            m_v.remove(idx);
+        }
+
+        m_v.retain(|m| {!simple_out_of_bounds(&head, &m) && !self.collision_with_body(m) && !self.collision_with_snakes(simple_board, m)});
+
+         m_v
+    }
+
+    fn next_position(&self, movement: &Movement) -> Coord {
+        let head = &self.body[0];
+        match movement {
+            Movement::Up => {Coord {x: head.x, y:head.y + 1}}
+            Movement::Down => {Coord {x: head.x, y:head.y - 1}}
+            Movement::Left => {Coord {x: head.x - 1, y:head.y}}
+            Movement::Right => {Coord {x: head.x + 1, y:head.y}}
+        }
+    }
+
+    fn collision_with_body(&self, movement: &Movement) -> bool {
+        let head = &self.body[0];
+        let next_pos = self.next_position(movement);
+        self.body.iter().any(|b| b == &next_pos)
+    }
+
+    fn collision_with_snakes(&self, simple_board: &SimpleBoard, movement: &Movement) -> bool {
+        let head = &self.body[0];
+        let next_pos = self.next_position(movement);
+        simple_board.snakes.iter().any(|s| {
+            s.body.iter().any(|b| b == &next_pos)
+        })
+    }
 }
+
+fn simple_out_of_bounds(coord: &Coord, movement: &Movement) -> bool {
+    match movement {
+        Movement::Up => {coord.y == 10}
+        Movement::Down => {coord.y == 0}
+        Movement::Left => {coord.x == 0}
+        Movement::Right => {coord.x == 10}
+    }
+}
+
 
 const MAX_DEPTH: u32 = 3;
 const MAX_VALUE: i32 = 32000;
