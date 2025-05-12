@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Display;
+use rocket::form::validate::Contains;
 use rocket::yansi::Paint;
 use crate::{Battlesnake, Board, Coord};
 use crate::logic::{collision_with_body, collision_with_snakes, get_safe_moves, out_of_bounds};
@@ -54,20 +55,35 @@ impl SimpleBoard {
         v
     }
     // This could be using team instead of index and then do the combined moves
-    fn simulate_move(&self, our_team: bool) -> Vec<(Movement, Self)> {
+    fn simulate_move(&self, our_team: bool) -> Vec<(Movement, Movement, Self)> {
         let mut moves = Vec::new();
-        for snake in self.snakes.iter().filter(|s| s.our_team == our_team) {
-            moves.push(snake.get_safe_moves(self));
+        for (idx, snake) in self.snakes.iter().enumerate().filter(|(i, s)| s.our_team == our_team) {
+            moves.push((idx, snake.get_safe_moves(self)));
         }
-        let team_moves: Vec<(&Movement, &Movement)> = cartesian_move(&moves[0], &moves[1]).collect();
-        
-        let snake = self.snakes.get(idx).expect("bad index of snake");
-        let moves = get_safe_moves(self, snake);
-        let mut simulations: Vec<(Movement, SimpleBoard)> = Vec::new();
-        for m in moves.iter() {
-            simulations.push((m.clone(), self.clone()));
-            let board = simulations.last_mut().unwrap();
-            // Apply the move to the board...
+        let snake_order = (moves[0].0, moves[1].0);
+        let team_moves: Vec<(&Movement, &Movement)> = cartesian_move(&moves[0].1, &moves[1].1).collect();
+        let mut simulations = Vec::new();
+        for (m1, m2) in team_moves.iter() {
+            let s1_np = self.snakes[snake_order.0].next_position(m1);
+            let s2_np = self.snakes[snake_order.1].next_position(m2);
+            if s1_np == s2_np {
+                continue;
+            }
+            let mut new_board = self.clone();
+            let mut s1_body = self.snakes[snake_order.0].body.clone();
+            let mut s2_body = self.snakes[snake_order.1].body.clone();
+            s1_body.push_front(s1_np);
+            s2_body.push_front(s2_np);
+            while let Some((idx, pos)) = new_board.food.iter().enumerate().next() {
+                if pos == &s1_np {
+                    new_board.food.remove(idx);
+                    s1_body.pop_back();
+                } else if pos == &s2_np { // can do else since s1_np != s2_np
+                    new_board.food.remove(idx);
+                    s2_body.pop_back();
+                }
+            }
+            simulations.push(((*m1).clone(), (*m2).clone(), new_board));
         }
         simulations
     }
@@ -82,14 +98,14 @@ fn cartesian_move<'a>(v1: &'a[Movement], v2: &'a[Movement]) -> impl Iterator<Ite
 pub struct SimpleSnake {
     our_team: bool,
     health: usize,
-    body: Vec<Coord>,
+    body: VecDeque<Coord>,
 }
 impl SimpleSnake {
     pub fn from(snake: &Battlesnake, our_team: bool) -> Self {
         SimpleSnake {
             our_team,
             health: snake.health.clone() as usize,
-            body: snake.body.clone(),
+            body: VecDeque::from(snake.body.clone());
         }
     }
     fn evaluate_value(&self) -> usize {
@@ -165,7 +181,7 @@ fn search(board: &Board) {
     let root_board = SimpleBoard::from(board);
     let alpha = MAX_VALUE;
     let beta = -MAX_VALUE;
-    for (movement, new_board) in root_board.simulate_move(our_team).iter() {
+    for (m1, m2, new_board) in root_board.simulate_move(our_team).iter() {
         inner_search(new_board, 1, alpha, beta, !our_team);
     }
 }
