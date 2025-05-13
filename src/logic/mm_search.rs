@@ -157,7 +157,8 @@ fn heuristic(_board: &Board, team_ids: &[String; 2], enemy_ids: &[String; 2]) ->
     let mut no_team_snakes = true;
     for id in team_ids {
         if let Some(snake) = _board.snakes.iter().find(|s| s.id == *id) {
-            let flood = ff.get(snake);
+            let flood = ff.get(snake).expect("No such snake in flood fill map").len() as i32 >> 2;
+            value += flood;
             value += snake.length;
             if snake.health < 50 {
                 value -= 1; // Penalize for low health
@@ -171,6 +172,8 @@ fn heuristic(_board: &Board, team_ids: &[String; 2], enemy_ids: &[String; 2]) ->
     let mut no_enemy_snakes = true;
     for id in enemy_ids {
         if let Some(snake) = _board.snakes.iter().find(|s| s.id == *id) {
+            let flood = ff.get(snake).expect("No such snake in flood fill map").len() as i32 >> 2;
+            value -= flood;
             value -= snake.length;
             if snake.health < 50 {
                 value += 1; // Reward for low health

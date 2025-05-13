@@ -69,8 +69,6 @@ pub fn get_move(
         .iter()
         .position(|x| x == &my_id)
         .expect("Agent ID not found");
-    let simple_snakes: Vec<SimpleSnake> = _board.snakes.iter().map(|snake| SimpleSnake::from(snake, game_info.agent_ids.contains(&snake.id))).collect();
-    let simple_board = SimpleBoard::from(_board, simple_snakes);
     
     if game_info.agent_moves[team_idx].len() == *turn as usize + 1 {
         return json!({ "move": game_info.agent_moves[team_idx][*turn as usize] });

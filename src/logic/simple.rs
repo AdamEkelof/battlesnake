@@ -1,8 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Display;
-use rocket::form::validate::Contains;
-use rocket::yansi::Paint;
-use crate::{Battlesnake, Board, Coord};
+use crate::{Battlesnake, Board, Coord, GameInfo};
 use crate::logic::{collision_with_body, collision_with_snakes, get_safe_moves, out_of_bounds};
 
 #[derive(Clone)]
@@ -41,6 +39,59 @@ impl SimpleBoard {
             snakes,
         }
     }
+    
+    fn evaluate_team(&self, our_team: bool) -> usize {
+        let mut v = 0;
+        for snake in self.snakes.iter() {
+            if snake.our_team == our_team {
+                v += snake.evaluate_value();
+            }
+        }
+        v
+    }
+    
+    fn oliver_heuristic(&self) -> i32 {
+        if self.snakes.len() == 0 {
+            return 0;
+        }
+        let mut v = 0;
+        let mut count = 0;
+        for snake in self.snakes.iter().filter(|s| s.our_team) {
+            v += snake.body.len() as i32;
+            if snake.health < 50 {
+                v -= 1;
+            }
+            count += 1;
+        }
+        if count == 0 {
+            return i32::MIN;
+        }
+        count = 0;
+        for snake in self.snakes.iter().filter(|s| !s.our_team) {
+            v -= snake.body.len() as i32;
+            if snake.health < 50 {
+                v += 1;
+            }
+            count += 1;
+        }
+        if count == 0 {
+            return i32::MAX;
+        }
+        v
+    }
+    
+    fn flood_fill(&self) -> HashMap<&SimpleSnake, i32> {
+        let mut v = HashMap::new();
+        let mut queue: Vec<(&SimpleSnake, Coord)> = self
+            .snakes
+            .iter()
+            .map(|x| (x, x.body[0]))
+            .collect();
+        queue.sort_by(|a, b| b.0.body.len().cmp(&a.0.body.len()));
+        let mut queue = VecDeque::from(queue);
+        v
+    }
+    
     fn evaluate_board(&self) -> Vec<usize> {
         let mut v = Vec::new();
         v.push(0);
@@ -105,7 +156,7 @@ impl SimpleSnake {
         SimpleSnake {
             our_team,
             health: snake.health.clone() as usize,
-            body: VecDeque::from(snake.body.clone());
+            body: VecDeque::from(snake.body.clone()),
         }
     }
     fn evaluate_value(&self) -> usize {
@@ -176,9 +227,17 @@ fn simple_out_of_bounds(coord: &Coord, movement: &Movement) -> bool {
 const MAX_DEPTH: u32 = 3;
 const MAX_VALUE: i32 = 32000;
 
-fn search(board: &Board) {
-    let our_team = true;
-    let root_board = SimpleBoard::from(board);
+fn search(board: &Board, game_info: &GameInfo, our_snake: &Battlesnake) {
+    let simple_snakes: Vec<SimpleSnake> = board.snakes.iter().map(|snake| SimpleSnake::from(snake, game_info.agent_ids.contains(&snake.id))).collect();
+    let simple_board = SimpleBoard::from(board, simple_snakes);
+    let our_snake_idx = simple_board.snakes.iter().enumerate().position(|(i,s)| s.body[0] == our_snake.head).expect("Our snake not found");
+    let diff = simple_board.oliver_heuristic();
+    // We want to make sure the opposing team does not catch up, i.e. minimize their score
+    if diff > 0 {
+        
+    } else { // Minmax
+        
+    }
     let alpha = MAX_VALUE;
     let beta = -MAX_VALUE;
     for (m1, m2, new_board) in root_board.simulate_move(our_team).iter() {
