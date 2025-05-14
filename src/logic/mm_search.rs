@@ -1,4 +1,4 @@
-use crate::{Battlesnake, Board, Coord};
+use crate::{Battlesnake, Board, Coord, GameInfo};
 use crate::logic::{flood_fill, get_safe_moves};
 use std::{
     collections::HashMap,
@@ -8,7 +8,29 @@ use std::{
 use log::info;
 
 use crate::board_rep::{move_snake, check_deaths};
+use crate::logic::simple::{Movement, SimpleBoard};
 
+pub fn search_simple(_board: &Board, game_info: &GameInfo, timeout: u32) -> (Movement, Movement) {
+    let simple_board = SimpleBoard::from(_board, game_info);
+    let mut values = Vec::new();
+    let mut moves = Vec::new();
+    
+    let mut best_value = i32::MIN;
+    let simulations = simple_board.simulate_move(true);
+    for (move_pair, next_board) in simulations {
+        // minmax on enemies since this outer loop is on friendly
+        let value = minmax_simple(&next_board, 1, false, timeout); 
+        best_value = best_value.max(value);
+        values.push(value);
+        moves.push(move_pair);
+    }
+    let idx = values.iter().enumerate().max_by(|(_,v), (_,v2)| v.cmp(v2)).map(|(i,_)| i).expect("No best move found");
+    moves[idx]
+}
+
+fn minmax_simple(board: &SimpleBoard, depth: i32, our_team: bool, timeout: u32) -> i32 {
+    unimplemented!("Minmax simple");
+}
 pub fn search(_board: &Board, team_ids: &[String; 2], enemy_ids: &[String; 2], timeout: u32) -> [String; 2] {
     let joint_moves: Vec<[&str; 2]> = get_joint_moves(_board, team_ids);
     let mut values: Vec<i32> = Vec::new();

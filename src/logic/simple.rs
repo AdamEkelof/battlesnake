@@ -4,14 +4,14 @@ use crate::{Battlesnake, Board, Coord, GameInfo};
 use crate::logic::{collision_with_body, collision_with_snakes, get_safe_moves, out_of_bounds};
 
 #[derive(Copy, Clone)]
-enum Movement {
+pub enum Movement {
     Up,
     Down,
     Left,
     Right,
 }
 impl Movement {
-    fn all() -> Vec<Movement> {
+    pub fn all() -> Vec<Movement> {
         vec![Self::Up, Self::Down, Self::Left, Self::Right]
     }
 }
@@ -120,7 +120,7 @@ impl SimpleBoard {
     // }
     
     // This could be using team instead of index and then do the combined moves
-    fn simulate_move(&self, our_team: bool) -> Vec<((Movement, Movement), Self)> {
+    pub fn simulate_move(&self, our_team: bool) -> Vec<((Movement, Movement), Self)> {
         let idx = if our_team { self.team } else { self.opps };
         let mut moves = Vec::new();
         let mut alive = 0;
