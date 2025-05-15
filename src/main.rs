@@ -14,7 +14,6 @@ use std::sync::{Arc, Mutex};
 
 mod logic;
 use logic::simple::Movement;
-mod board_rep;
 
 type SharedData = Arc<Mutex<HashMap<String, GameInfo>>>;
 

@@ -175,7 +175,7 @@ impl SimpleBoard {
         let mut simulations = Vec::new();
         let team_moves: Vec<[Movement; 2]> = cartesian_move(&moves[0], &moves[1]).collect();
         for m in team_moves {
-            let mut next_pos = [
+            let next_pos = [
                 if alive[idx[0]] {self.snakes[idx[0]].as_ref().unwrap().next_position(m[0])} else {Coord { x: -2, y: -1 }},
                 if alive[idx[1]] {self.snakes[idx[1]].as_ref().unwrap().next_position(m[1])} else {Coord { x: -1, y: -2 }},
             ];
@@ -210,6 +210,9 @@ impl SimpleBoard {
             next_board
                 .food
                 .retain(|f| f != &next_pos[0] && f != &next_pos[1]);
+
+            next_board.kill_snakes();
+
             simulations.push((m, next_board));
         }
         if simulations.len() == 0 {
