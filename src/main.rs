@@ -13,6 +13,7 @@ use rocket::{get, launch, routes, State};
 use std::sync::{Arc, Mutex};
 
 mod logic;
+use logic::simple::Movement;
 mod board_rep;
 
 type SharedData = Arc<Mutex<HashMap<String, GameInfo>>>;
@@ -103,7 +104,7 @@ pub struct GameInfo {
     id: String,
     timeout: u32,
     agent_ids: [String; 2],
-    agent_moves: [Vec<String>; 2],
+    agent_moves: [Vec<Movement>; 2],
 }
 
 #[get("/")]

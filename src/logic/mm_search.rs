@@ -1,19 +1,23 @@
 use crate::logic::{flood_fill, get_safe_moves};
-use crate::{Battlesnake, Board, Coord, GameInfo};
+use crate::{Battlesnake, Board, /*Coord,*/ GameInfo};
 use log::info;
-use std::{collections::HashMap, convert::TryInto, time::Instant};
+use std::{collections::HashMap, /*convert::TryInto,*/ time::Instant};
 
 use crate::board_rep::{check_deaths, move_snake};
 use crate::logic::simple::{Movement, SimpleBoard};
 
-pub fn search(board: &Board, game_info: &GameInfo, timeout: u32) -> (Movement, Movement) {
+pub fn search(board: &Board, game_info: &GameInfo) -> [Movement; 2] {
+    let start = Instant::now();
     let simple_board = SimpleBoard::from(board, game_info);
+    let timeout: i32 = game_info.timeout as i32;
     let mut values = Vec::new();
     let mut moves = Vec::new();
 
     let mut best_value = i32::MIN;
     let simulations = simple_board.simulate_move(true);
-    for (move_pair, next_board) in simulations {
+    for (i, (move_pair, next_board)) in simulations.iter().enumerate() {
+        let time: i32 = (timeout - start.elapsed().as_millis() as i32) / (simulations.len() as i32 - i as i32);
+        info!("Move {} time: {} (timeout: {} elapsed: {})", i, time, timeout, start.elapsed().as_millis());
         // minmax on enemies since this outer loop is on friendly
         let value = minmax_simple(
             &next_board,
@@ -21,9 +25,9 @@ pub fn search(board: &Board, game_info: &GameInfo, timeout: u32) -> (Movement, M
             false,
             best_value,
             i32::MAX,
+            1,
             5,
-            15,
-            timeout as i32,
+            time,
         );
         best_value = best_value.max(value);
         values.push(value);
@@ -34,8 +38,8 @@ pub fn search(board: &Board, game_info: &GameInfo, timeout: u32) -> (Movement, M
         .enumerate()
         .max_by(|(_, v), (_, v2)| v.cmp(v2))
         .map(|(i, _)| i)
-        .expect("No best move found");
-    moves[idx]
+        .expect(&format!("No best move found in values: {:?} for {} moves", values, simulations.len()));
+    *moves[idx]
 }
 
 // pub fn search(
@@ -105,6 +109,7 @@ fn minmax_simple(
 ) -> i32 {
     let start = Instant::now();
     if depth == 100 || heuristic_time + return_time >= timeout {
+        info!("Depth {} reached", depth);
         return board.heuristic();
     }
 
@@ -114,11 +119,12 @@ fn minmax_simple(
     } else {
         simulations.sort_by_key(|s| s.1.heuristic());
     }
-    // Detta är värre än det som finns i den tidigare i att den beräknar heuristic en extra gång för en sim men kanske sparas temporärt i cache och mer lättläst
+    
     if let Some(sim) = simulations.first() {
-        if our_team && sim.1.heuristic() == i32::MAX {
+        let h = sim.1.heuristic();
+        if our_team && h == i32::MAX {
             return i32::MAX;
-        } else if !our_team && sim.1.heuristic() == i32::MIN {
+        } else if !our_team && h == i32::MIN {
             return i32::MIN;
         }
     }
@@ -215,7 +221,7 @@ fn minimax(
 
     let mut best_value = if is_maximizing { i32::MIN } else { i32::MAX };
 
-    for (m_idx, move_pair) in joint_moves.iter().enumerate() {
+    for m_idx in 0..joint_moves.len() {
         let time_left: i32 = timeout - start.elapsed().as_millis() as i32 - return_time;
         if time_left <= 0 {
             info!("Ran out of time at depth {}", depth);

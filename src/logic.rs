@@ -10,11 +10,11 @@
 // To get you started we've included code to prevent your Battlesnake from moving backwards.
 // For more info see docs.battlesnake.com
 
-mod simple;
+pub mod simple;
 mod mm_search;
 
 use log::info;
-use rand::seq::SliceRandom;
+//use rand::seq::SliceRandom;
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
@@ -24,7 +24,7 @@ use std::{
 use crate::{Battlesnake, Board, Coord, Game, GameInfo};
 
 use mm_search::search;
-use simple::{SimpleBoard, SimpleSnake};
+//use simple::{SimpleBoard, SimpleSnake};
 
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
@@ -85,7 +85,7 @@ pub fn get_move(
         temp_ids[i] = id.clone();
     }
 
-    let moves = search(_board, &game_info.agent_ids, &temp_ids, game_info.timeout);
+    let moves = search(_board, &game_info,);
     for i in 0..2 {
         game_info.agent_moves[i].push(moves[i].clone());
     }

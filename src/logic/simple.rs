@@ -1,9 +1,11 @@
-use rocket::futures::future::ok;
+//use rocket::futures::future::ok;
 
-use crate::logic::{collision_with_body, collision_with_snakes, get_safe_moves, out_of_bounds};
+//use crate::logic::{collision_with_body, collision_with_snakes, get_safe_moves, out_of_bounds};
 use crate::{Battlesnake, Board, Coord, GameInfo};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{/*HashMap,*/ VecDeque};
 use std::fmt::Display;
+use serde::{Serialize, Serializer};
+use std::cell::Cell;
 
 #[derive(Copy, Clone)]
 pub enum Movement {
@@ -30,6 +32,21 @@ impl Display for Movement {
         write!(f, "{}", str)
     }
 }
+impl Serialize for Movement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let str = match self {
+            Movement::Up => String::from("up"),
+            Movement::Down => String::from("down"),
+            Movement::Left => String::from("left"),
+            Movement::Right => String::from("right"),
+            Movement::None => String::from("no movement made somehow"),
+        };
+        serializer.serialize_str(&str)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct SimpleBoard {
@@ -37,6 +54,7 @@ pub struct SimpleBoard {
     pub snakes: Vec<Option<SimpleSnake>>,
     team: [usize; 2],
     opps: [usize; 2],
+    pub stored_heuristic: Cell<Option<i32>>,
 }
 impl SimpleBoard {
     pub fn from(board: &Board, game_info: &GameInfo) -> Self {
@@ -45,6 +63,7 @@ impl SimpleBoard {
             snakes: Vec::new(),
             team: [0; 2],
             opps: [0; 2],
+            stored_heuristic: Cell::new(None),
         };
         let mut friendly_count = 0;
         let mut enemy_count = 0;
@@ -72,7 +91,11 @@ impl SimpleBoard {
     // }
 
     pub fn heuristic(&self) -> i32 {
+        if let Some(v) = self.stored_heuristic.get() {
+            return v;
+        }
         if self.snakes.len() == 0 {
+            self.stored_heuristic.set(Some(0));
             return 0;
         }
         let mut v = 0;
@@ -93,6 +116,7 @@ impl SimpleBoard {
             }
         }
         if dead_snake_count == 2 {
+            self.stored_heuristic.set(Some(i32::MIN));
             return i32::MIN;
         }
         dead_snake_count = 0;
@@ -111,8 +135,10 @@ impl SimpleBoard {
             }
         }
         if dead_snake_count == 2 {
+            self.stored_heuristic.set(Some(i32::MAX));
             return i32::MAX;
         }
+        self.stored_heuristic.set(Some(v));
         v
     }
 
@@ -129,70 +155,65 @@ impl SimpleBoard {
     // }
 
     // This could be using team instead of index and then do the combined moves
-    pub fn simulate_move(&self, our_team: bool) -> Vec<((Movement, Movement), Self)> {
+    pub fn simulate_move(&self, our_team: bool) -> Vec<([Movement; 2], Self)> {
         let idx = if our_team { self.team } else { self.opps };
         let mut moves = Vec::new();
-        let mut alive = 0;
+        let mut alive = [false; 4];
         for i in idx {
             if let Some(snake) = &self.snakes[i] {
-                alive = i;
-                moves.push(snake.get_safe_moves(self));
+                alive[i] = true;
+                let mut m = snake.get_safe_moves(self);
+                if m.len() == 0 {
+                    m.push(Movement::Down);
+                }
+                moves.push(m);
+            } else {
+                moves.push(vec![Movement::Down]);
             }
         }
+
         let mut simulations = Vec::new();
-        if moves.len() == 2 {
-            let team_moves: Vec<(Movement, Movement)> = cartesian_move(&moves[0], &moves[1])
-                .map(|(&m1, &m2)| (m1, m2))
-                .collect();
-            for m in team_moves {
-                let mut next_pos = [
-                    self.snakes[idx[0]].as_ref().unwrap().next_position(m.0),
-                    self.snakes[idx[1]].as_ref().unwrap().next_position(m.1),
-                ];
-                if next_pos[0] == next_pos[1] {
-                    continue;
-                }
-                let mut next_board = self.clone();
+        let team_moves: Vec<[Movement; 2]> = cartesian_move(&moves[0], &moves[1]).collect();
+        for m in team_moves {
+            let mut next_pos = [
+                if alive[idx[0]] {self.snakes[idx[0]].as_ref().unwrap().next_position(m[0])} else {Coord { x: -2, y: -1 }},
+                if alive[idx[1]] {self.snakes[idx[1]].as_ref().unwrap().next_position(m[1])} else {Coord { x: -1, y: -2 }},
+            ];
+            if next_pos[0] == next_pos[1] {
+                continue;
+            }
+            
+            let mut next_board = self.clone();
+            if alive[idx[0]] {
                 next_board.snakes[idx[0]]
                     .as_mut()
                     .unwrap()
                     .body
                     .push_front(next_pos[0]);
+
+                if !next_board.food.contains(&next_pos[0]) {
+                    next_board.snakes[idx[0]].as_mut().unwrap().body.pop_back();
+                }
+            }
+            if alive[idx[1]] {
                 next_board.snakes[idx[1]]
                     .as_mut()
                     .unwrap()
                     .body
                     .push_front(next_pos[1]);
-                for pos in next_board.food.iter() {
-                    if pos == &next_pos[0] {
-                        next_board.snakes[idx[0]].as_mut().unwrap().body.pop_back();
-                    } else if pos == &next_pos[1] {
-                        next_board.snakes[idx[1]].as_mut().unwrap().body.pop_back();
-                    }
+
+                if !next_board.food.contains(&next_pos[1]) {
+                    next_board.snakes[idx[1]].as_mut().unwrap().body.pop_back();
                 }
-                next_board
-                    .food
-                    .retain(|f| f != &next_pos[0] && f != &next_pos[1]);
-                simulations.push((m, next_board));
             }
-        } else {
-            // use alive not idx
-            for &m in moves[0].iter() {
-                let next_pos = self.snakes[alive].as_ref().unwrap().next_position(m);
-                let mut next_board = self.clone();
-                next_board.snakes[alive]
-                    .as_mut()
-                    .unwrap()
-                    .body
-                    .push_front(next_pos);
-                for pos in next_board.food.iter() {
-                    if pos == &next_pos {
-                        next_board.snakes[alive].as_mut().unwrap().body.pop_back();
-                    }
-                }
-                next_board.food.retain(|f| f != &next_pos);
-                simulations.push(((m, Movement::Down), next_board))
-            }
+
+            next_board
+                .food
+                .retain(|f| f != &next_pos[0] && f != &next_pos[1]);
+            simulations.push((m, next_board));
+        }
+        if simulations.len() == 0 {
+            return vec![([Movement::Down; 2], self.clone())];
         }
         simulations
     }
@@ -220,8 +241,8 @@ impl SimpleBoard {
 fn cartesian_move<'a>(
     v1: &'a [Movement],
     v2: &'a [Movement],
-) -> impl Iterator<Item = (&'a Movement, &'a Movement)> + 'a {
-    v1.iter().flat_map(move |m| std::iter::repeat(m).zip(v2))
+) -> impl Iterator<Item = [Movement; 2]> + 'a {
+    v1.iter().flat_map(move |&m1| v2.iter().map(move |&m2| [m1, m2]))
 }
 
 #[derive(Debug, Clone)]

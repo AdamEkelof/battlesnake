@@ -1,5 +1,5 @@
 use crate::{Battlesnake, Board, Coord};
-use log::info;
+//use log::info;
 
 pub fn move_snake(
     board: &Board,
@@ -7,7 +7,7 @@ pub fn move_snake(
     m: &str, // Assumed to be safe move
 ) -> Board {
     let mut new_board = board.clone();
-    let mut snake: &mut Battlesnake;
+    let snake: &mut Battlesnake;
     if let Some(s) = new_board.snakes.iter_mut().find(|s| s.id == id) {
         snake = s;
     } else {
