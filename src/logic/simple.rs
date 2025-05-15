@@ -1,7 +1,9 @@
+use rocket::futures::future::ok;
+
+use crate::logic::{collision_with_body, collision_with_snakes, get_safe_moves, out_of_bounds};
+use crate::{Battlesnake, Board, Coord, GameInfo};
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Display;
-use crate::{Battlesnake, Board, Coord, GameInfo};
-use crate::logic::{collision_with_body, collision_with_snakes, get_safe_moves, out_of_bounds};
 
 #[derive(Copy, Clone)]
 pub enum Movement {
@@ -9,6 +11,7 @@ pub enum Movement {
     Down,
     Left,
     Right,
+    None,
 }
 impl Movement {
     pub fn all() -> Vec<Movement> {
@@ -22,6 +25,7 @@ impl Display for Movement {
             Movement::Down => String::from("down"),
             Movement::Left => String::from("left"),
             Movement::Right => String::from("right"),
+            Movement::None => String::from("no movement made somehow"),
         };
         write!(f, "{}", str)
     }
@@ -36,7 +40,12 @@ pub struct SimpleBoard {
 }
 impl SimpleBoard {
     pub fn from(board: &Board, game_info: &GameInfo) -> Self {
-        let mut simple_board = SimpleBoard{food: board.food.clone(), snakes: Vec::new(), team: [0; 2], opps: [0; 2]};
+        let mut simple_board = SimpleBoard {
+            food: board.food.clone(),
+            snakes: Vec::new(),
+            team: [0; 2],
+            opps: [0; 2],
+        };
         let mut friendly_count = 0;
         let mut enemy_count = 0;
         for (idx, snake) in board.snakes.iter().enumerate() {
@@ -44,14 +53,14 @@ impl SimpleBoard {
             if game_info.agent_ids.contains(&snake.id) {
                 simple_board.team[friendly_count] = idx;
                 friendly_count += 1;
-            } else { 
+            } else {
                 simple_board.opps[enemy_count] = idx;
                 enemy_count += 1;
             }
         }
         simple_board
     }
-    
+
     // fn evaluate_team(&self, our_team: bool) -> usize {
     //     let mut v = 0;
     //     for snake in self.snakes.iter() {
@@ -61,8 +70,8 @@ impl SimpleBoard {
     //     }
     //     v
     // }
-    
-    fn oliver_heuristic(&self) -> i32 {
+
+    pub fn heuristic(&self) -> i32 {
         if self.snakes.len() == 0 {
             return 0;
         }
@@ -74,9 +83,9 @@ impl SimpleBoard {
                 Some(snake) => {
                     v += snake.body.len() as i32;
                     if snake.health < 50 {
-                        v-= 1;
+                        v -= 1;
                     }
-                },
+                }
                 None => {
                     dead_snake_count += 1;
                     v -= 10;
@@ -94,7 +103,7 @@ impl SimpleBoard {
                     if snake.health < 50 {
                         v += 1;
                     }
-                },
+                }
                 None => {
                     dead_snake_count += 1;
                     v += 10;
@@ -106,7 +115,7 @@ impl SimpleBoard {
         }
         v
     }
-    
+
     // fn flood_fill(&self) -> HashMap<&SimpleSnake, i32> {
     //     let mut v = HashMap::new();
     //     let mut queue: Vec<(&SimpleSnake, Coord)> = self
@@ -118,7 +127,7 @@ impl SimpleBoard {
     //     let mut queue = VecDeque::from(queue);
     //     v
     // }
-    
+
     // This could be using team instead of index and then do the combined moves
     pub fn simulate_move(&self, our_team: bool) -> Vec<((Movement, Movement), Self)> {
         let idx = if our_team { self.team } else { self.opps };
@@ -132,15 +141,28 @@ impl SimpleBoard {
         }
         let mut simulations = Vec::new();
         if moves.len() == 2 {
-            let team_moves: Vec<(Movement, Movement)> = cartesian_move(&moves[0], &moves[1]).map(|(&m1, &m2)| (m1, m2)).collect();
+            let team_moves: Vec<(Movement, Movement)> = cartesian_move(&moves[0], &moves[1])
+                .map(|(&m1, &m2)| (m1, m2))
+                .collect();
             for m in team_moves {
-                let mut next_pos = [self.snakes[idx[0]].as_ref().unwrap().next_position(m.0), self.snakes[idx[1]].as_ref().unwrap().next_position(m.1)];
+                let mut next_pos = [
+                    self.snakes[idx[0]].as_ref().unwrap().next_position(m.0),
+                    self.snakes[idx[1]].as_ref().unwrap().next_position(m.1),
+                ];
                 if next_pos[0] == next_pos[1] {
                     continue;
                 }
                 let mut next_board = self.clone();
-                next_board.snakes[idx[0]].as_mut().unwrap().body.push_front(next_pos[0]);
-                next_board.snakes[idx[1]].as_mut().unwrap().body.push_front(next_pos[1]);
+                next_board.snakes[idx[0]]
+                    .as_mut()
+                    .unwrap()
+                    .body
+                    .push_front(next_pos[0]);
+                next_board.snakes[idx[1]]
+                    .as_mut()
+                    .unwrap()
+                    .body
+                    .push_front(next_pos[1]);
                 for pos in next_board.food.iter() {
                     if pos == &next_pos[0] {
                         next_board.snakes[idx[0]].as_mut().unwrap().body.pop_back();
@@ -148,7 +170,9 @@ impl SimpleBoard {
                         next_board.snakes[idx[1]].as_mut().unwrap().body.pop_back();
                     }
                 }
-                next_board.food.retain(|f| f != &next_pos[0] && f != &next_pos[1]);
+                next_board
+                    .food
+                    .retain(|f| f != &next_pos[0] && f != &next_pos[1]);
                 simulations.push((m, next_board));
             }
         } else {
@@ -156,22 +180,47 @@ impl SimpleBoard {
             for &m in moves[0].iter() {
                 let next_pos = self.snakes[alive].as_ref().unwrap().next_position(m);
                 let mut next_board = self.clone();
-                next_board.snakes[alive].as_mut().unwrap().body.push_front(next_pos);
+                next_board.snakes[alive]
+                    .as_mut()
+                    .unwrap()
+                    .body
+                    .push_front(next_pos);
                 for pos in next_board.food.iter() {
                     if pos == &next_pos {
                         next_board.snakes[alive].as_mut().unwrap().body.pop_back();
                     }
                 }
                 next_board.food.retain(|f| f != &next_pos);
-                simulations.push(((m, Movement::Down), next_board)) 
+                simulations.push(((m, Movement::Down), next_board))
             }
         }
         simulations
     }
+
+    fn kill_snakes(&mut self) {
+        let mut kill_idxs = Vec::new();
+        for (i, o_snake) in self.snakes.iter().enumerate() {
+            if let Some(snake) = o_snake {
+                if snake.health == 0
+                    || snake.collision_with_snakes(&self, Movement::None)
+                    || snake.collision_with_body(Movement::None)
+                {
+                    kill_idxs.push(i);
+                    continue;
+                }
+            }
+        }
+        for idx in kill_idxs {
+            self.snakes[idx] = None;
+        }
+    }
 }
 
 // Galenskap hehe
-fn cartesian_move<'a>(v1: &'a[Movement], v2: &'a[Movement]) -> impl Iterator<Item = (&'a Movement, &'a Movement)> + 'a {
+fn cartesian_move<'a>(
+    v1: &'a [Movement],
+    v2: &'a [Movement],
+) -> impl Iterator<Item = (&'a Movement, &'a Movement)> + 'a {
     v1.iter().flat_map(move |m| std::iter::repeat(m).zip(v2))
 }
 
@@ -196,24 +245,37 @@ impl SimpleSnake {
         let mut m_v = Movement::all();
         let head = &self.body[0];
         let neck = &self.body[1];
-        if neck.x < head.x  {
-            let idx = m_v.iter().position(|m| matches!(m, Movement::Left)).unwrap();
+        if neck.x < head.x {
+            let idx = m_v
+                .iter()
+                .position(|m| matches!(m, Movement::Left))
+                .unwrap();
             m_v.remove(idx);
         }
-        if neck.x > head.x  {
-            let idx = m_v.iter().position(|m| matches!(m, Movement::Right)).unwrap();
+        if neck.x > head.x {
+            let idx = m_v
+                .iter()
+                .position(|m| matches!(m, Movement::Right))
+                .unwrap();
             m_v.remove(idx);
         }
-        if neck.y < head.y  {
-            let idx = m_v.iter().position(|m| matches!(m, Movement::Down)).unwrap();
+        if neck.y < head.y {
+            let idx = m_v
+                .iter()
+                .position(|m| matches!(m, Movement::Down))
+                .unwrap();
             m_v.remove(idx);
         }
-        if neck.y > head.y  {
+        if neck.y > head.y {
             let idx = m_v.iter().position(|m| matches!(m, Movement::Up)).unwrap();
             m_v.remove(idx);
         }
 
-        m_v.retain(|&m| {!simple_out_of_bounds(&head, &m) && !self.collision_with_body(m) && !self.collision_with_snakes(simple_board, m)});
+        m_v.retain(|&m| {
+            !simple_out_of_bounds(&head, &m)
+                && !self.collision_with_body(m)
+                && !self.collision_with_snakes(simple_board, m)
+        });
 
         m_v
     }
@@ -221,10 +283,23 @@ impl SimpleSnake {
     fn next_position(&self, movement: Movement) -> Coord {
         let head = &self.body[0];
         match movement {
-            Movement::Up => {Coord {x: head.x, y:head.y + 1}}
-            Movement::Down => {Coord {x: head.x, y:head.y - 1}}
-            Movement::Left => {Coord {x: head.x - 1, y:head.y}}
-            Movement::Right => {Coord {x: head.x + 1, y:head.y}}
+            Movement::Up => Coord {
+                x: head.x,
+                y: head.y + 1,
+            },
+            Movement::Down => Coord {
+                x: head.x,
+                y: head.y - 1,
+            },
+            Movement::Left => Coord {
+                x: head.x - 1,
+                y: head.y,
+            },
+            Movement::Right => Coord {
+                x: head.x + 1,
+                y: head.y,
+            },
+            Movement::None => head.clone(),
         }
     }
 
@@ -236,23 +311,21 @@ impl SimpleSnake {
     fn collision_with_snakes(&self, simple_board: &SimpleBoard, movement: Movement) -> bool {
         let next_pos = self.next_position(movement);
         simple_board.snakes.iter().any(|s| {
-            s.as_ref().map_or(false, |snake| snake.body.contains(&next_pos))
+            s.as_ref()
+                .map_or(false, |snake| snake.body.contains(&next_pos))
         })
     }
 }
 
 fn simple_out_of_bounds(coord: &Coord, movement: &Movement) -> bool {
     match movement {
-        Movement::Up => {coord.y == 10}
-        Movement::Down => {coord.y == 0}
-        Movement::Left => {coord.x == 0}
-        Movement::Right => {coord.x == 10}
+        Movement::Up => coord.y == 10,
+        Movement::Down => coord.y == 0,
+        Movement::Left => coord.x == 0,
+        Movement::Right => coord.x == 10,
+        Movement::None => false,
     }
 }
-
-
-const MAX_DEPTH: u32 = 3;
-const MAX_VALUE: i32 = 32000;
 
 // fn search(board: &Board, game_info: &GameInfo, our_snake: &Battlesnake) {
 //     let simple_snakes: Vec<SimpleSnake> = board.snakes.iter().map(|snake| SimpleSnake::from(snake, game_info.agent_ids.contains(&snake.id))).collect();
@@ -261,9 +334,9 @@ const MAX_VALUE: i32 = 32000;
 //     let diff = simple_board.oliver_heuristic();
 //     // We want to make sure the opposing team does not catch up, i.e. minimize their score
 //     if diff > 0 {
-//         
+//
 //     } else { // Minmax
-//         
+//
 //     }
 //     //let alpha = MAX_VALUE;
 //     //let beta = -MAX_VALUE;
@@ -271,7 +344,7 @@ const MAX_VALUE: i32 = 32000;
 //     //    inner_search(new_board, 1, alpha, beta, !our_team);
 //     //}
 // }
-// 
+//
 // fn inner_search(
 //     board: &SimpleBoard,
 //     depth: u32,
