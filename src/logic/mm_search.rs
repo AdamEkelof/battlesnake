@@ -9,15 +9,15 @@ use crate::logic::simple::{Movement, SimpleBoard};
 pub fn search(board: &Board, game_info: &GameInfo) -> [Movement; 2] {
     let start = Instant::now();
     let simple_board = SimpleBoard::from(board, game_info);
-    let timeout: i32 = game_info.timeout as i32;
+    let timeout: i32 = game_info.timeout as i32 * 1_000_000; // Convert milliseconds to nanoseconds
     let mut values = Vec::new();
     let mut moves = Vec::new();
 
     let mut best_value = i32::MIN;
     let simulations = simple_board.simulate_move(true);
     for (i, (move_pair, next_board)) in simulations.iter().enumerate() {
-        let time: i32 = (timeout - start.elapsed().as_millis() as i32) / (simulations.len() as i32 - i as i32);
-        info!("Move {} time: {} (timeout: {} elapsed: {})", i, time, timeout, start.elapsed().as_millis());
+        let time: i32 = (timeout - start.elapsed().as_nanos() as i32) / (simulations.len() as i32 - i as i32);
+        info!("Move {} time: {} (timeout: {} elapsed: {})", i, time, timeout, start.elapsed().as_nanos());
         // minmax on enemies since this outer loop is on friendly
         let value = minmax_simple(
             &next_board,
@@ -26,7 +26,7 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [Movement; 2] {
             best_value,
             i32::MAX,
             1,
-            5,
+            1,
             time,
         );
         best_value = best_value.max(value);
@@ -109,7 +109,7 @@ fn minmax_simple(
 ) -> i32 {
     let start = Instant::now();
     if depth == 100 || heuristic_time + return_time >= timeout {
-        info!("Depth {} reached", depth);
+        //info!("Depth {} reached", depth);
         return board.heuristic();
     }
 
@@ -132,9 +132,9 @@ fn minmax_simple(
     let mut best_value = if our_team { i32::MIN } else { i32::MAX };
 
     for (idx, (_, next_board)) in simulations.iter().enumerate() {
-        let time_left = timeout - start.elapsed().as_millis() as i32 - return_time;
+        let time_left = timeout - start.elapsed().as_nanos() as i32 - return_time;
         if time_left <= 0 {
-            info!("Ran out of time at depth {}", depth);
+            //info!("Ran out of time at depth {}", depth);
             return best_value;
         }
 
