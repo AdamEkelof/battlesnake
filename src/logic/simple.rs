@@ -202,7 +202,7 @@ impl SimpleBoard {
         for (i, o_snake) in self.snakes.iter().enumerate() {
             if let Some(snake) = o_snake {
                 if snake.health == 0
-                    || snake.collision_with_snakes(&self, Movement::None)
+                    || snake.collision_with_snakes(&self, Movement::None).1
                     || snake.collision_with_body(Movement::None)
                 {
                     kill_idxs.push(i);
@@ -274,7 +274,7 @@ impl SimpleSnake {
         m_v.retain(|&m| {
             !simple_out_of_bounds(&head, &m)
                 && !self.collision_with_body(m)
-                && !self.collision_with_snakes(simple_board, m)
+                && !self.collision_with_snakes(simple_board, m).0
         });
 
         m_v
@@ -308,12 +308,29 @@ impl SimpleSnake {
         self.body.iter().any(|b| b == &next_pos)
     }
 
-    fn collision_with_snakes(&self, simple_board: &SimpleBoard, movement: Movement) -> bool {
+    /// Checks if the head of the snake is intersecting the body of another snake.
+    /// Returns two bools, collision check and death check respectively.
+    /// TODO: maybe only collisions that kill are interesting to report...
+    fn collision_with_snakes(
+        &self,
+        simple_board: &SimpleBoard,
+        movement: Movement,
+    ) -> (bool, bool) {
         let next_pos = self.next_position(movement);
-        simple_board.snakes.iter().any(|s| {
-            s.as_ref()
-                .map_or(false, |snake| snake.body.contains(&next_pos))
-        })
+        let mut any_collision = false;
+        let mut dead = false;
+        simple_board.snakes.iter().for_each(|s| {
+            let collision = s
+                .as_ref()
+                .map_or(false, |snake| snake.body.contains(&next_pos));
+            if collision {
+                any_collision = true;
+                if s.as_ref().unwrap().body.len() >= self.body.len() {
+                    dead = true;
+                }
+            }
+        });
+        (any_collision, dead)
     }
 }
 
