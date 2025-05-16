@@ -6,8 +6,9 @@ use std::collections::{/*HashMap,*/ VecDeque};
 use std::fmt::Display;
 use serde::{Serialize, Serializer};
 use std::cell::Cell;
+use log::info;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Movement {
     Up,
     Down,
@@ -92,6 +93,7 @@ impl SimpleBoard {
 
     pub fn heuristic(&self) -> i32 {
         if let Some(v) = self.stored_heuristic.get() {
+            info!("Using stored heuristic: {}", v);
             return v;
         }
         if self.snakes.len() == 0 {
@@ -110,6 +112,7 @@ impl SimpleBoard {
                     }
                 }
                 None => {
+                    info!("Dead snake in our team");
                     dead_snake_count += 1;
                     v -= 10;
                 }
@@ -117,6 +120,7 @@ impl SimpleBoard {
         }
         if dead_snake_count == 2 {
             self.stored_heuristic.set(Some(i32::MIN));
+            info!("both snakes dead");
             return i32::MIN;
         }
         dead_snake_count = 0;
@@ -211,7 +215,11 @@ impl SimpleBoard {
                 .food
                 .retain(|f| f != &next_pos[0] && f != &next_pos[1]);
 
+            //info!("Simulating move: {:?} -> \n{}", m, next_board);              
+
             next_board.kill_snakes();
+
+            //info!("Killed snakes: \n{}", next_board);
 
             simulations.push((m, next_board));
         }
@@ -227,7 +235,7 @@ impl SimpleBoard {
             if let Some(snake) = o_snake {
                 if snake.health == 0
                     || snake.collision_with_snakes(&self, Movement::None).1
-                    || snake.collision_with_body(Movement::None)
+                    || simple_out_of_bounds(&snake.body[0], &Movement::None)
                 {
                     kill_idxs.push(i);
                     continue;
@@ -239,6 +247,34 @@ impl SimpleBoard {
         }
     }
 }
+impl std::fmt::Display for SimpleBoard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        /* build board representation string */
+        let mut board: String = "\n|:---------:|".to_owned();
+        for y in (0..11).rev() {
+            board += "\n|";
+            for x in 0..11 {
+                let coord = Coord { x: x as i32, y: y as i32 };
+                let piece: String = if self.food.contains(&coord) {
+                    "f".to_string()
+                } else if let Some(snake) = self.snakes.iter().filter_map(|s| s.as_ref()).find(|s| s.body.contains(&coord)) {
+                    if snake.body[0] == coord {
+                        "h".to_string()
+                    } else {
+                        "s".to_string()
+                    }
+                } else {
+                    " ".to_string()
+                };
+                board += &piece;
+            }
+            board += "|";
+        }
+        board += "\n|:---------:|";
+
+        write!(f, "{}", board)
+    }
+}
 
 // Galenskap hehe
 fn cartesian_move<'a>(
@@ -248,7 +284,7 @@ fn cartesian_move<'a>(
     v1.iter().flat_map(move |&m1| v2.iter().map(move |&m2| [m1, m2]))
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimpleSnake {
     health: i32,
     body: VecDeque<Coord>,
@@ -343,13 +379,24 @@ impl SimpleSnake {
         let next_pos = self.next_position(movement);
         let mut any_collision = false;
         let mut dead = false;
-        simple_board.snakes.iter().for_each(|s| {
+        simple_board.snakes.iter().filter(|s| {
+            if let Some(snake) = s {
+                snake != self
+            } else {
+                false
+            }
+        }).for_each(|s| {
             let collision = s
                 .as_ref()
                 .map_or(false, |snake| snake.body.contains(&next_pos));
             if collision {
                 any_collision = true;
-                if s.as_ref().unwrap().body.len() >= self.body.len() {
+                // Only check length if collision is with the head, otherwise always dead
+                if s.as_ref().unwrap().body[0] == next_pos {
+                    if s.as_ref().unwrap().body.len() >= self.body.len() {
+                        dead = true;
+                    }
+                } else {
                     dead = true;
                 }
             }

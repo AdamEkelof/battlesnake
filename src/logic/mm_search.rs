@@ -1,6 +1,38 @@
 use crate::{Board, /*Coord,*/ GameInfo};
 use log::info;
 use std::time::Instant;
+use std::fmt;
+
+// Define a tree node that can have many children
+#[derive(Debug)]
+struct TreeNode {
+    value: i32,
+    children: Vec<TreeNode>,
+}
+
+impl TreeNode {
+    fn new(value: i32) -> Self {
+        TreeNode {
+            value,
+            children: Vec::new(),
+        }
+    }
+
+    fn add_child(&mut self, child: TreeNode) {
+        info!("Adding child with value: {}", child.value);
+        self.children.push(child);
+    }
+
+    fn print(&self, prefix: String, is_last: bool) {
+        println!("{}{}─ {}", prefix, if is_last { "└" } else { "├" }, self.value);
+        let new_prefix = format!("{}{}", prefix, if is_last { "   " } else { "│  " });
+
+        let last_index = self.children.len().saturating_sub(1);
+        for (i, child) in self.children.iter().enumerate() {
+            child.print(new_prefix.clone(), i == last_index);
+        }
+    }
+}
 
 use crate::logic::simple::{Movement, SimpleBoard};
 
@@ -16,6 +48,9 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [Movement; 2] {
     for (i, (move_pair, next_board)) in simulations.iter().enumerate() {
         let time: i32 = (timeout - start.elapsed().as_nanos() as i32) / (simulations.len() as i32 - i as i32);
         info!("Move {} time: {} (timeout: {} elapsed: {})", i, time, timeout, start.elapsed().as_nanos());
+
+        let mut root = TreeNode::new(0);
+
         // minmax on enemies since this outer loop is on friendly
         let value = minmax_simple(
             &next_board,
@@ -26,7 +61,9 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [Movement; 2] {
             1,
             1,
             time,
+            &mut root,
         );
+        root.print(format!("{:?}:", move_pair), true);
         best_value = best_value.max(value);
         values.push(value);
         moves.push(move_pair);
@@ -49,11 +86,16 @@ fn minmax_simple(
     heuristic_time: i32,
     return_time: i32,
     timeout: i32,
+    parent: &mut TreeNode,
 ) -> i32 {
     let start = Instant::now();
+    let mut node = TreeNode::new(0);
     if depth == 100 || heuristic_time + return_time >= timeout {
         //info!("Depth {} reached", depth);
-        return board.heuristic();
+        let h = board.heuristic();
+        node.value = h;
+        parent.add_child(node);
+        return h;
     }
 
     let mut simulations = board.simulate_move(our_team);
@@ -62,12 +104,19 @@ fn minmax_simple(
     } else {
         simulations.sort_by_key(|s| s.1.heuristic());
     }
+
     
     if let Some(sim) = simulations.first() {
         let h = sim.1.heuristic();
         if our_team && h == i32::MAX {
+            info!("Found max value at depth {}", depth);
+            node.value = i32::MAX;
+            parent.add_child(node);
             return i32::MAX;
         } else if !our_team && h == i32::MIN {
+            info!("Found min value at depth {}", depth);
+            node.value = i32::MIN;
+            parent.add_child(node);
             return i32::MIN;
         }
     }
@@ -78,6 +127,8 @@ fn minmax_simple(
         let time_left = timeout - start.elapsed().as_nanos() as i32 - return_time;
         if time_left <= 0 {
             //info!("Ran out of time at depth {}", depth);
+            node.value = best_value;
+            parent.add_child(node);
             return best_value;
         }
 
@@ -92,6 +143,7 @@ fn minmax_simple(
             heuristic_time,
             return_time,
             time_per_move,
+            &mut node,
         );
         if our_team {
             best_value = best_value.max(value);
@@ -108,5 +160,7 @@ fn minmax_simple(
         }
     }
 
+    node.value = best_value;
+    parent.add_child(node);
     best_value
 }
