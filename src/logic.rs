@@ -10,8 +10,8 @@
 // To get you started we've included code to prevent your Battlesnake from moving backwards.
 // For more info see docs.battlesnake.com
 
-pub mod simple;
 mod mm_search;
+pub mod simple;
 
 use log::info;
 //use rand::seq::SliceRandom;
@@ -66,7 +66,7 @@ pub fn get_move(
         .iter()
         .position(|x| x == &my_id)
         .expect("Agent ID not found");
-    
+
     if game_info.agent_moves[team_idx].len() == *turn as usize + 1 {
         return json!({ "move": game_info.agent_moves[team_idx][*turn as usize] });
     }
@@ -82,13 +82,12 @@ pub fn get_move(
         temp_ids[i] = id.clone();
     }
 
-    let moves = search(_board, &game_info,);
+    let moves = search(_board, &game_info);
     for i in 0..2 {
         game_info.agent_moves[i].push(moves[i].clone());
     }
 
-
-    let chosen = moves[team_idx].clone();
+    let chosen = moves[team_idx];
     info!("MOVE {}: {}", turn, chosen);
     // store down for team mate
     return json!({ "move": chosen });

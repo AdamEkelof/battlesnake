@@ -1,7 +1,6 @@
 use crate::{Board, /*Coord,*/ GameInfo};
 use log::info;
 use std::time::Instant;
-use std::fmt;
 
 // Define a tree node that can have many children
 #[derive(Debug)]
@@ -24,7 +23,12 @@ impl TreeNode {
     }
 
     fn print(&self, prefix: String, is_last: bool) {
-        println!("{}{}─ {}", prefix, if is_last { "└" } else { "├" }, self.value);
+        println!(
+            "{}{}─ {}",
+            prefix,
+            if is_last { "└" } else { "├" },
+            self.value
+        );
         let new_prefix = format!("{}{}", prefix, if is_last { "   " } else { "│  " });
 
         let last_index = self.children.len().saturating_sub(1);
@@ -46,8 +50,15 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [Movement; 2] {
     let mut best_value = i32::MIN;
     let simulations = simple_board.simulate_move(true);
     for (i, (move_pair, next_board)) in simulations.iter().enumerate() {
-        let time: i32 = (timeout - start.elapsed().as_nanos() as i32) / (simulations.len() as i32 - i as i32);
-        info!("Move {} time: {} (timeout: {} elapsed: {})", i, time, timeout, start.elapsed().as_nanos());
+        let time: i32 =
+            (timeout - start.elapsed().as_nanos() as i32) / (simulations.len() as i32 - i as i32);
+        info!(
+            "Move {} time: {} (timeout: {} elapsed: {})",
+            i,
+            time,
+            timeout,
+            start.elapsed().as_nanos()
+        );
 
         let mut root = TreeNode::new(0);
 
@@ -73,7 +84,11 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [Movement; 2] {
         .enumerate()
         .max_by(|(_, v), (_, v2)| v.cmp(v2))
         .map(|(i, _)| i)
-        .expect(&format!("No best move found in values: {:?} for {} moves", values, simulations.len()));
+        .expect(&format!(
+            "No best move found in values: {:?} for {} moves",
+            values,
+            simulations.len()
+        ));
     *moves[idx]
 }
 
@@ -105,7 +120,6 @@ fn minmax_simple(
         simulations.sort_by_key(|s| s.1.heuristic());
     }
 
-    
     if let Some(sim) = simulations.first() {
         let h = sim.1.heuristic();
         if our_team && h == i32::MAX {
