@@ -18,7 +18,7 @@ impl TreeNode {
     }
 
     fn add_child(&mut self, child: TreeNode) {
-        info!("Adding child with value: {}", child.value);
+        //info!("Adding child with value: {}", child.value);
         self.children.push(child);
     }
 
@@ -105,7 +105,7 @@ fn minmax_simple(
 ) -> i32 {
     let start = Instant::now();
     let mut node = TreeNode::new(0);
-    if depth == 100 || heuristic_time + return_time >= timeout {
+    if depth == 5 || heuristic_time + return_time >= timeout {
         //info!("Depth {} reached", depth);
         let h = board.heuristic();
         node.value = h;
@@ -123,12 +123,12 @@ fn minmax_simple(
     if let Some(sim) = simulations.first() {
         let h = sim.1.heuristic();
         if our_team && h == i32::MAX {
-            info!("Found max value at depth {}", depth);
+            //info!("Found max value at depth {}", depth);
             node.value = i32::MAX;
             parent.add_child(node);
             return i32::MAX;
         } else if !our_team && h == i32::MIN {
-            info!("Found min value at depth {}", depth);
+            //info!("Found min value at depth {}", depth);
             node.value = i32::MIN;
             parent.add_child(node);
             return i32::MIN;
@@ -141,9 +141,11 @@ fn minmax_simple(
         let time_left = timeout - start.elapsed().as_nanos() as i32 - return_time;
         if time_left <= 0 {
             //info!("Ran out of time at depth {}", depth);
-            node.value = best_value;
+            let h = board.heuristic();
+            let ret = if our_team { h.max(best_value) } else { h.min(best_value) };
+            node.value = h;
             parent.add_child(node);
-            return best_value;
+            return h;
         }
 
         let iterations_left = simulations.len() as i32 - idx as i32;
@@ -174,6 +176,7 @@ fn minmax_simple(
         }
     }
 
+    //info!("Best value at depth {}: {}", depth, best_value);
     node.value = best_value;
     parent.add_child(node);
     best_value

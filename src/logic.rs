@@ -71,23 +71,12 @@ pub fn get_move(
         return json!({ "move": game_info.agent_moves[team_idx][*turn as usize] });
     }
 
-    let mut temp_ids: [String; 2] = ["".to_string(), "".to_string()];
-    let enemy_ids: Vec<String> = game_info
-        .agent_ids
-        .iter()
-        .filter(|&x| !game_info.agent_ids.contains(&x))
-        .cloned()
-        .collect();
-    for (i, id) in enemy_ids.iter().enumerate() {
-        temp_ids[i] = id.clone();
-    }
+    let moves = search(_board, &game_info,);
+    game_info.agent_moves[team_idx].push(moves[0].clone());
+    game_info.agent_moves[1 - team_idx].push(moves[1].clone());
 
-    let moves = search(_board, &game_info);
-    for i in 0..2 {
-        game_info.agent_moves[i].push(moves[i].clone());
-    }
 
-    let chosen = moves[team_idx];
+    let chosen = moves[0].clone();
     info!("MOVE {}: {}", turn, chosen);
     // store down for team mate
     return json!({ "move": chosen });

@@ -93,7 +93,7 @@ impl SimpleBoard {
 
     pub fn heuristic(&self) -> i32 {
         if let Some(v) = self.stored_heuristic.get() {
-            info!("Using stored heuristic: {}", v);
+            //info!("Using stored heuristic: {}", v);
             return v;
         }
         if self.snakes.len() == 0 {
@@ -160,6 +160,7 @@ impl SimpleBoard {
 
     // This could be using team instead of index and then do the combined moves
     pub fn simulate_move(&self, our_team: bool) -> Vec<([Movement; 2], Self)> {
+        self.stored_heuristic.set(None);
         let idx = if our_team { self.team } else { self.opps };
         let mut moves = Vec::new();
         let mut alive = [false; 4];
@@ -297,8 +298,9 @@ fn cartesian_move<'a>(
     v1: &'a [Movement],
     v2: &'a [Movement],
 ) -> impl Iterator<Item = [Movement; 2]> + 'a {
-    v1.iter()
-        .flat_map(move |&m1| v2.iter().map(move |&m2| [m1, m2]))
+    let ret = v1.iter().flat_map(move |&m1| v2.iter().map(move |&m2| [m1, m2]));
+    //info!("Cartesian product from {:?} and {:?} = {:?}", v1, v2, ret.clone().collect::<Vec<_>>());
+    ret
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
