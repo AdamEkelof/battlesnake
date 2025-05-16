@@ -5,7 +5,7 @@ use crate::{Battlesnake, Board, Coord, GameInfo};
 use log::info;
 use serde::{Serialize, Serializer};
 use std::cell::Cell;
-use std::collections::{/*HashMap,*/ VecDeque};
+use std::collections::{/*HashMap,*/ HashMap, VecDeque};
 use std::fmt::Display;
 
 #[derive(Copy, Clone, Debug)]
@@ -157,6 +157,22 @@ impl SimpleBoard {
     //     let mut queue = VecDeque::from(queue);
     //     v
     // }
+    fn flood_fill(&self) -> HashMap<usize, Vec<Coord>> {
+        let mut mapping = HashMap::new();
+        let mut queue: Vec<(usize, Coord)> = self
+            .snakes
+            .iter()
+            .enumerate()
+            .filter(|(_, o)| o.is_some())
+            .map(|(i, s)| (i, s.as_ref().unwrap().body[0]))
+            .collect();
+        queue.sort_by_key(|&(i, _)| self.snakes[i].as_ref().unwrap().body.len());
+        let mut queue = VecDeque::from(queue);
+        for &(idx, _) in queue.iter() {
+            mapping.insert(idx, Vec::new());
+        }
+        mapping
+    }
 
     // This could be using team instead of index and then do the combined moves
     pub fn simulate_move(&self, our_team: bool) -> Vec<([Movement; 2], Self)> {
