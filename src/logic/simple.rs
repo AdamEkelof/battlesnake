@@ -5,7 +5,7 @@ use crate::{Battlesnake, Board, Coord, GameInfo};
 use log::info;
 use serde::{Serialize, Serializer};
 use std::cell::Cell;
-use std::collections::{/*HashMap,*/ VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::fmt::{Debug, Display};
 
 #[derive(Copy, Clone, Debug)]
@@ -74,8 +74,8 @@ impl SimpleBoard {
         let mut simple_board = SimpleBoard {
             food: board.food.clone(),
             snakes: Vec::new(),
-            team: [0; 2],
-            opps: [0; 2],
+            team: [10; 2],
+            opps: [10; 2],
             stored_heuristic: Cell::new(None),
         };
         let mut friendly_count = 0;
@@ -118,17 +118,23 @@ impl SimpleBoard {
         let mut dead_snake_count = 0;
         // lägg in så man är 1 längre än motståndare
         for f_idx in self.team {
-            match &self.snakes[f_idx] {
-                Some(snake) => {
-                    length_value += snake.body.len() as f32;
-                    if snake.health < 20 {
-                        health_value -= 20.0 - snake.health as f32;
+            if f_idx >= self.snakes.len() {
+                // Index out of range, treat as None
+                dead_snake_count += 1;
+                death_value -= 1.0;
+            } else {
+                match &self.snakes[f_idx] {
+                    Some(snake) => {
+                        length_value += snake.body.len() as f32;
+                        if snake.health < 20 {
+                            health_value -= 20.0 - snake.health as f32;
+                        }
                     }
-                }
-                None => {
-                    info!("Dead snake in our team");
-                    dead_snake_count += 1;
-                    death_value -= 1.0;
+                    None => {
+                        //info!("Dead snake in our team");
+                        dead_snake_count += 1;
+                        death_value -= 1.0;
+                    }
                 }
             }
         }
@@ -139,16 +145,22 @@ impl SimpleBoard {
         }
         dead_snake_count = 0;
         for e_idx in self.opps {
-            match &self.snakes[e_idx] {
-                Some(snake) => {
-                    length_value -= snake.body.len() as f32;
-                    if snake.health < 20 {
-                        health_value += 20.0 - snake.health as f32;
+            if e_idx >= self.snakes.len() {
+                // Index out of range, treat as None
+                dead_snake_count += 1;
+                death_value += 1.0;
+            } else {
+                match &self.snakes[e_idx] {
+                    Some(snake) => {
+                        length_value -= snake.body.len() as f32;
+                        if snake.health < 20 {
+                            health_value += 20.0 - snake.health as f32;
+                        }
                     }
-                }
-                None => {
-                    dead_snake_count += 1;
-                    death_value += 1.0;
+                    None => {
+                        dead_snake_count += 1;
+                        death_value += 1.0;
+                    }
                 }
             }
         }
@@ -201,7 +213,12 @@ impl SimpleBoard {
         let mut moves = Vec::new();
         let mut alive = [false; 4];
         for i in idx {
-            if let Some(snake) = &self.snakes[i] {
+            if i >= self.snakes.len() { 
+                moves.push(vec![SnakeMove {
+                    id: i,
+                    mv: Movement::Down,
+                }]);
+            } else if let Some(snake) = &self.snakes[i] {
                 alive[i] = true;
                 let mut m = snake.get_safe_moves(self);
                 if m.len() == 0 {
@@ -215,7 +232,7 @@ impl SimpleBoard {
             } else {
                 moves.push(vec![SnakeMove {
                     id: i,
-                    mv: Movement::None,
+                    mv: Movement::Down,
                 }]);
             }
         }
@@ -224,7 +241,7 @@ impl SimpleBoard {
         let team_moves: Vec<[SnakeMove; 2]> = cartesian_move(&moves[0], &moves[1]).collect();
         for m in team_moves {
             let next_pos = [
-                if alive[idx[0]] {
+                if idx[0] <= alive.len() && alive[idx[0]] {
                     self.snakes[idx[0]]
                         .as_ref()
                         .unwrap()
@@ -232,7 +249,7 @@ impl SimpleBoard {
                 } else {
                     Coord { x: -2, y: -1 }
                 },
-                if alive[idx[1]] {
+                if idx[1] <= alive.len() && alive[idx[1]] {
                     self.snakes[idx[1]]
                         .as_ref()
                         .unwrap()
@@ -246,7 +263,7 @@ impl SimpleBoard {
             }
 
             let mut next_board = self.clone();
-            if alive[idx[0]] {
+            if idx[0] <= alive.len() && alive[idx[0]] {
                 next_board.snakes[idx[0]]
                     .as_mut()
                     .unwrap()
@@ -257,7 +274,7 @@ impl SimpleBoard {
                     next_board.snakes[idx[0]].as_mut().unwrap().body.pop_back();
                 }
             }
-            if alive[idx[1]] {
+            if idx[1] <= alive.len() && alive[idx[1]] {
                 next_board.snakes[idx[1]]
                     .as_mut()
                     .unwrap()
@@ -282,17 +299,18 @@ impl SimpleBoard {
             simulations.push((m, next_board));
         }
 
-        // Varför har vi så här? Är det inte bättre att i callern att se om simulations är 0 så return min/max?
+        // Det här behöver ersättas med lösning för att låta en leva om de "måste" huvudkrocka
+        // Det eller att det inte finns några safe moves är enda sätten simulations kan ge 0 moves
         if simulations.len() == 0 {
             return vec![(
                 [
                     SnakeMove {
                         id: idx[0],
-                        mv: Movement::None,
+                        mv: Movement::Down,
                     },
                     SnakeMove {
                         id: idx[1],
-                        mv: Movement::None,
+                        mv: Movement::Down,
                     },
                 ],
                 self.clone(),

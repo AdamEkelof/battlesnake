@@ -74,17 +74,14 @@ pub fn get_move(
     let moves = search(_board, &game_info);
 
     let teammate_id = game_info.agent_ids[1 - team_idx].clone();
-    let board_idx = if _board.snakes.iter().position(|s| s.id == my_id)
-        < _board.snakes.iter().position(|s| s.id == teammate_id)
-    {
-        0
-    } else {
-        1
-    };
+    let board_idx = _board.snakes.iter().position(|s| s.id == my_id).unwrap();
     let chosen = moves.iter().find(|mv| mv.id == board_idx).unwrap().mv;
     game_info.agent_moves[team_idx].push(chosen);
-    game_info.agent_moves[1 - team_idx]
-        .push(moves.iter().find(|mv| mv.id == (1 - board_idx)).unwrap().mv);
+    let teammate_idx =  _board.snakes.iter().position(|s| s.id == teammate_id);
+    if !teammate_idx.is_none() {
+        game_info.agent_moves[1 - team_idx]
+            .push(moves.iter().find(|mv| mv.id == teammate_idx.unwrap()).unwrap().mv);
+    }
 
     info!("MOVE {}: {}", turn, chosen);
     // store down for team mate

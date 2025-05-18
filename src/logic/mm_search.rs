@@ -53,15 +53,8 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
     let mut best_value = f32::MIN;
     let simulations = simple_board.simulate_move(true);
     for (i, (move_pair, next_board)) in simulations.iter().enumerate() {
-        let time: i32 =
-            (timeout - start.elapsed().as_nanos() as i32) / (simulations.len() as i32 - i as i32);
-        info!(
-            "Move {} time: {} (timeout: {} elapsed: {})",
-            i,
-            time,
-            timeout,
-            start.elapsed().as_nanos()
-        );
+        let time: i32 = (timeout - start.elapsed().as_nanos() as i32) / (simulations.len() as i32 - i as i32);
+        info!("Move {} time: {} (timeout: {} elapsed: {})", i, time, timeout, start.elapsed().as_nanos());
 
         let mut root = TreeNode::new(0.0);
 
@@ -73,11 +66,11 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
             best_value,
             f32::MAX,
             1,
-            1,
+            80,
             time,
             &mut root,
         );
-        root.print(format!("{:?}:", move_pair), true);
+        //root.print(format!("{:?}:", move_pair), true);
         best_value = best_value.max(value);
         values.push(value);
         moves.push(move_pair);
@@ -108,7 +101,7 @@ fn minmax_simple(
 ) -> f32 {
     let start = Instant::now();
     let mut node = TreeNode::new(0.0);
-    if depth == 5 || heuristic_time + return_time >= timeout {
+    if depth == 100 || heuristic_time + return_time >= timeout {
         //info!("Depth {} reached", depth);
         let h = board.heuristic();
         node.value = h;

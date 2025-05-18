@@ -127,7 +127,7 @@ fn handle_start(shared_data: &State<SharedData>, start_req: Json<GameState>) -> 
         // Create a new game info entry
         let game_info = GameInfo {
             id: game_id.clone(),
-            timeout: start_req.game.timeout,
+            timeout: start_req.game.timeout-25,
             agent_ids: [you_id.clone(), String::new()],
             agent_moves: [vec![], vec![]],
         };
@@ -163,8 +163,16 @@ fn handle_move(shared_data: &State<SharedData>, move_req: Json<GameState>) -> Js
 }
 
 #[post("/end", format = "json", data = "<end_req>")]
-fn handle_end(_shared_data: &State<SharedData>, end_req: Json<GameState>) -> Status {
+fn handle_end(shared_data: &State<SharedData>, end_req: Json<GameState>) -> Status {
     logic::end(&end_req.game, &end_req.turn, &end_req.board, &end_req.you);
+    // Store game information in shared data
+    let mut data = shared_data.lock().unwrap();
+    // Check if the game ID already exists
+    let game_id = end_req.game.id.clone();
+    if let Some(game_info) = data.get_mut(&game_id) {
+        // Remove the game info from shared data
+        data.remove(&game_id);
+    }
 
     Status::Ok
 }
