@@ -6,7 +6,7 @@ use log::info;
 use serde::{Serialize, Serializer};
 use std::cell::Cell;
 use std::collections::{/*HashMap,*/ VecDeque};
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Movement {
@@ -46,6 +46,18 @@ impl Serialize for Movement {
             Movement::None => String::from("no movement made somehow"),
         };
         serializer.serialize_str(&str)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct SnakeMove {
+    pub id: usize,
+    pub mv: Movement,
+}
+
+impl Debug for SnakeMove {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("Movement {} by {}", self.mv, self.id))
     }
 }
 
@@ -144,9 +156,7 @@ impl SimpleBoard {
             self.stored_heuristic.set(Some(f32::MAX));
             return f32::MAX;
         }
-        let v = health_value * 0.5 +
-                length_value * 2.0 + 
-                death_value* 10.0;
+        let v = health_value * 0.5 + length_value * 2.0 + death_value * 10.0;
         self.stored_heuristic.set(Some(v));
         v
     }
@@ -164,7 +174,7 @@ impl SimpleBoard {
     // }
 
     // This could be using team instead of index and then do the combined moves
-    pub fn simulate_move(&self, our_team: bool) -> Vec<([Movement; 2], Self)> {
+    pub fn simulate_move(&self, our_team: bool) -> Vec<([SnakeMove; 2], Self)> {
         self.stored_heuristic.set(None);
         let idx = if our_team { self.team } else { self.opps };
         let mut moves = Vec::new();
@@ -176,23 +186,36 @@ impl SimpleBoard {
                 if m.len() == 0 {
                     m.push(Movement::Down);
                 }
-                moves.push(m);
+                moves.push(
+                    m.iter()
+                        .map(|&m| SnakeMove { id: i, mv: m })
+                        .collect::<Vec<SnakeMove>>(),
+                );
             } else {
-                moves.push(vec![Movement::Down]);
+                moves.push(vec![SnakeMove {
+                    id: i,
+                    mv: Movement::None,
+                }]);
             }
         }
 
         let mut simulations = Vec::new();
-        let team_moves: Vec<[Movement; 2]> = cartesian_move(&moves[0], &moves[1]).collect();
+        let team_moves: Vec<[SnakeMove; 2]> = cartesian_move(&moves[0], &moves[1]).collect();
         for m in team_moves {
             let next_pos = [
                 if alive[idx[0]] {
-                    self.snakes[idx[0]].as_ref().unwrap().next_position(m[0])
+                    self.snakes[idx[0]]
+                        .as_ref()
+                        .unwrap()
+                        .next_position(m.iter().find(|mv| mv.id == idx[0]).unwrap().mv)
                 } else {
                     Coord { x: -2, y: -1 }
                 },
                 if alive[idx[1]] {
-                    self.snakes[idx[1]].as_ref().unwrap().next_position(m[1])
+                    self.snakes[idx[1]]
+                        .as_ref()
+                        .unwrap()
+                        .next_position(m.iter().find(|mv| mv.id == idx[1]).unwrap().mv)
                 } else {
                     Coord { x: -1, y: -2 }
                 },
@@ -237,8 +260,22 @@ impl SimpleBoard {
 
             simulations.push((m, next_board));
         }
+
+        // Varför har vi så här? Är det inte bättre att i callern att se om simulations är 0 så return min/max?
         if simulations.len() == 0 {
-            return vec![([Movement::Down; 2], self.clone())];
+            return vec![(
+                [
+                    SnakeMove {
+                        id: idx[0],
+                        mv: Movement::None,
+                    },
+                    SnakeMove {
+                        id: idx[1],
+                        mv: Movement::None,
+                    },
+                ],
+                self.clone(),
+            )];
         }
         simulations
     }
@@ -300,10 +337,12 @@ impl std::fmt::Display for SimpleBoard {
 
 // Galenskap hehe
 fn cartesian_move<'a>(
-    v1: &'a [Movement],
-    v2: &'a [Movement],
-) -> impl Iterator<Item = [Movement; 2]> + 'a {
-    let ret = v1.iter().flat_map(move |&m1| v2.iter().map(move |&m2| [m1, m2]));
+    v1: &'a [SnakeMove],
+    v2: &'a [SnakeMove],
+) -> impl Iterator<Item = [SnakeMove; 2]> + 'a {
+    let ret = v1
+        .iter()
+        .flat_map(move |&m1| v2.iter().map(move |&m2| [m1, m2]));
     //info!("Cartesian product from {:?} and {:?} = {:?}", v1, v2, ret.clone().collect::<Vec<_>>());
     ret
 }

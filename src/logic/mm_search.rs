@@ -1,7 +1,7 @@
 use crate::{Board, /*Coord,*/ GameInfo};
 use log::info;
-use std::time::Instant;
 use ordered_float::OrderedFloat;
+use std::time::Instant;
 
 // Define a tree node that can have many children
 #[derive(Debug)]
@@ -39,9 +39,11 @@ impl TreeNode {
     }
 }
 
-use crate::logic::simple::{Movement, SimpleBoard};
+use crate::logic::simple::SimpleBoard;
 
-pub fn search(board: &Board, game_info: &GameInfo) -> [Movement; 2] {
+use super::simple::SnakeMove;
+
+pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
     let start = Instant::now();
     let simple_board = SimpleBoard::from(board, game_info);
     let timeout: i32 = game_info.timeout as i32 * 1_000_000; // Convert milliseconds to nanoseconds
@@ -143,7 +145,12 @@ fn minmax_simple(
         if time_left <= 0 {
             //info!("Ran out of time at depth {}", depth);
             let h = board.heuristic();
-            let ret = if our_team { h.max(best_value) } else { h.min(best_value) };
+            // What is this ret for?
+            let ret = if our_team {
+                h.max(best_value)
+            } else {
+                h.min(best_value)
+            };
             node.value = h;
             parent.add_child(node);
             return h;

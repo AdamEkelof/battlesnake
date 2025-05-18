@@ -71,27 +71,21 @@ pub fn get_move(
         return json!({ "move": game_info.agent_moves[team_idx][*turn as usize] });
     }
 
-    let moves = search(_board, &game_info,);
+    let moves = search(_board, &game_info);
 
-    let teamate_id = game_info.agent_ids[1 - team_idx].clone();
-    let board_idx = if _board
-        .snakes
-        .iter()
-        .position(|s| s.id == my_id)
-        < _board
-            .snakes
-            .iter()
-            .position(|s| s.id == teamate_id)
+    let teammate_id = game_info.agent_ids[1 - team_idx].clone();
+    let board_idx = if _board.snakes.iter().position(|s| s.id == my_id)
+        < _board.snakes.iter().position(|s| s.id == teammate_id)
     {
         0
     } else {
         1
     };
-    game_info.agent_moves[team_idx].push(moves[board_idx].clone());
-    game_info.agent_moves[1 - team_idx].push(moves[1 - board_idx].clone());
+    let chosen = moves.iter().find(|mv| mv.id == board_idx).unwrap().mv;
+    game_info.agent_moves[team_idx].push(chosen);
+    game_info.agent_moves[1 - team_idx]
+        .push(moves.iter().find(|mv| mv.id == (1 - board_idx)).unwrap().mv);
 
-
-    let chosen = moves[board_idx].clone();
     info!("MOVE {}: {}", turn, chosen);
     // store down for team mate
     return json!({ "move": chosen });
