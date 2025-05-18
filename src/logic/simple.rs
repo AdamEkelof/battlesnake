@@ -161,17 +161,38 @@ impl SimpleBoard {
         v
     }
 
-    // fn flood_fill(&self) -> HashMap<&SimpleSnake, i32> {
-    //     let mut v = HashMap::new();
-    //     let mut queue: Vec<(&SimpleSnake, Coord)> = self
-    //         .snakes
-    //         .iter()
-    //         .map(|x| (x, x.body[0]))
-    //         .collect();
-    //     queue.sort_by(|a, b| b.0.body.len().cmp(&a.0.body.len()));
-    //     let mut queue = VecDeque::from(queue);
-    //     v
-    // }
+    fn flood_fill(&self) -> HashMap<usize, Vec<Coord>> {
+        let mut mapping = HashMap::new();
+        let mut queue: Vec<(usize, Coord)> = self
+            .snakes
+            .iter()
+            .enumerate()
+            .filter(|(_, o)| o.is_some())
+            .map(|(i, s)| (i, s.as_ref().unwrap().body[0]))
+            .collect();
+        queue.sort_by_key(|&(i, _)| self.snakes[i].as_ref().unwrap().body.len());
+        let mut queue = VecDeque::from(queue);
+        for &(idx, _) in queue.iter() {
+            mapping.insert(idx, Vec::new());
+        }
+        let mut visited = [false; 121];
+        while let Some((i, coord)) = queue.pop_front() {
+            let arr_idx = (coord.y * 11 + coord.x) as usize;
+            if visited[arr_idx] {
+                continue;
+            }
+            visited[arr_idx] = true;
+            mapping.get_mut(&i).unwrap().push(coord);
+            for (dx, dy) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
+                let nx = coord.x + dx;
+                let ny = coord.y + dy;
+                if nx >= 0 && nx < 11 && ny >= 0 && ny < 11 {
+                    queue.push_back((i, Coord { x: nx, y: ny }));
+                }
+            }
+        }
+        mapping
+    }
 
     // This could be using team instead of index and then do the combined moves
     pub fn simulate_move(&self, our_team: bool) -> Vec<([SnakeMove; 2], Self)> {
