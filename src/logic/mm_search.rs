@@ -66,7 +66,7 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
             best_value,
             f32::MAX,
             1,
-            80,
+            2,
             time,
             &mut root,
         );
