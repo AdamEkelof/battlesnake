@@ -68,7 +68,7 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
             2,
             time,
             &mut root,
-        );
+        ).0;
         //root.print(format!("{:?}:", move_pair), true);
         info!("Move {:?} value: {}", move_pair, value);
         best_value = best_value.max(value);
@@ -98,7 +98,7 @@ fn minmax_simple(
     return_time: i32,
     timeout: i32,
     parent: &mut TreeNode,
-) -> i32 {
+) -> (i32, i32) {
     let start = Instant::now();
     let mut node = TreeNode::new(0);
     if depth == 100 || heuristic_time + return_time >= timeout {
@@ -106,7 +106,7 @@ fn minmax_simple(
         let h = board.heuristic();
         node.value = h;
         parent.add_child(node);
-        return h;
+        return (h, depth);
     }
 
     let mut simulations = board.simulate_move(our_team);
@@ -122,21 +122,21 @@ fn minmax_simple(
             //info!("Found max value at depth {}", depth);
             node.value = i32::MAX;
             parent.add_child(node);
-            return i32::MAX;
+            return (i32::MAX, depth);
         } else if !our_team && h == i32::MIN {
             //info!("Found min value at depth {}", depth);
             node.value = i32::MIN;
             parent.add_child(node);
-            return i32::MIN;
+            return (i32::MIN, depth);
         }
     }
 
-    let mut best_value = if our_team { i32::MIN } else { i32::MAX };
+    let mut best_value = if our_team { (i32::MIN, depth) } else { (i32::MAX, depth)};
 
     for (idx, (_, next_board)) in simulations.iter().enumerate() {
         let time_left = timeout - start.elapsed().as_nanos() as i32 - return_time;
         if time_left <= 0 {
-            best_value = simulations.first().unwrap().1.heuristic();
+            best_value = (simulations.first().unwrap().1.heuristic(), depth+1);
             break;
         }
 
@@ -154,28 +154,33 @@ fn minmax_simple(
             &mut node,
         );
         if our_team {
-            best_value = best_value.max(value);
-            alpha = alpha.max(best_value);
-            if best_value >= beta {
-                break;
+            if (value.0 > best_value.0) || (value.0 == best_value.0 && value.1 > best_value.1) {
+                best_value = value;
+                alpha = alpha.max(best_value.0);
+                if best_value.0 >= beta {
+                    break;
+                }
             }
         } else {
-            best_value = best_value.min(value);
-            beta = beta.min(best_value);
-            if best_value <= alpha {
-                break;
+            if (value.0 < best_value.0) || (value.0 == best_value.0 && value.1 > best_value.1) {
+                best_value = value;
+                beta = beta.max(best_value.0);
+                if best_value.0 <= alpha {
+                    break;
+                }
             }
         }
     }
 
     //info!("Best value at depth {}: {}", depth, best_value);
-    node.value = best_value;
+    node.value = best_value.0;
     parent.add_child(node);
-    if best_value == i32::MAX && board.heuristic() > 0 {
+    if best_value.0 == i32::MAX {
         return best_value;
     }
-    if best_value == i32::MIN && board.heuristic() < 0 {
+    if best_value.0 == i32::MIN {
         return best_value;
     }
-    best_value + board.heuristic()
+    let depth_diff = best_value.1 - depth;
+    ((best_value.0 * depth_diff + board.heuristic()) / (depth_diff+1), best_value.1)
 }
