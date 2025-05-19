@@ -135,17 +135,8 @@ fn minmax_simple(
     for (idx, (_, next_board)) in simulations.iter().enumerate() {
         let time_left = timeout - start.elapsed().as_nanos() as i32 - return_time;
         if time_left <= 0 {
-            //info!("Ran out of time at depth {}", depth);
-            let h = board.heuristic();
-            // What is this ret for?
-            let ret = if our_team {
-                h.max(best_value)
-            } else {
-                h.min(best_value)
-            };
-            node.value = h;
-            parent.add_child(node);
-            return h;
+            best_value = simulations.first().unwrap().1.heuristic();
+            break;
         }
 
         let iterations_left = simulations.len() as i32 - idx as i32;
@@ -179,5 +170,11 @@ fn minmax_simple(
     //info!("Best value at depth {}: {}", depth, best_value);
     node.value = best_value;
     parent.add_child(node);
-    best_value
+    if best_value == i32::MAX && board.heuristic() > 0 {
+        return best_value;
+    }
+    if best_value == i32::MIN && board.heuristic() < 0 {
+        return best_value;
+    }
+    best_value + board.heuristic()
 }
