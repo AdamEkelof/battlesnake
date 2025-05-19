@@ -1,17 +1,16 @@
 use crate::{Board, /*Coord,*/ GameInfo};
 use log::info;
-use ordered_float::OrderedFloat;
 use std::time::Instant;
 
 // Define a tree node that can have many children
 #[derive(Debug)]
 struct TreeNode {
-    value: f32,
+    value: i32,
     children: Vec<TreeNode>,
 }
 
 impl TreeNode {
-    fn new(value: f32) -> Self {
+    fn new(value: i32) -> Self {
         TreeNode {
             value,
             children: Vec::new(),
@@ -50,13 +49,13 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
     let mut values = Vec::new();
     let mut moves = Vec::new();
 
-    let mut best_value = f32::MIN;
+    let mut best_value = i32::MIN;
     let simulations = simple_board.simulate_move(true);
     for (i, (move_pair, next_board)) in simulations.iter().enumerate() {
         let time: i32 = (timeout - start.elapsed().as_nanos() as i32) / (simulations.len() as i32 - i as i32);
         info!("Move {} time: {} (timeout: {} elapsed: {})", i, time, timeout, start.elapsed().as_nanos());
 
-        let mut root = TreeNode::new(0.0);
+        let mut root = TreeNode::new(0);
 
         // minmax on enemies since this outer loop is on friendly
         let value = minmax_simple(
@@ -64,13 +63,13 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
             1,
             false,
             best_value,
-            f32::MAX,
+            i32::MAX,
             1,
             2,
             time,
             &mut root,
         );
-        //root.print(format!("{:?}:", move_pair), true);
+        root.print(format!("{:?}:", move_pair), true);
         best_value = best_value.max(value);
         values.push(value);
         moves.push(move_pair);
@@ -78,7 +77,7 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
     let idx = values
         .iter()
         .enumerate()
-        .max_by(|(_, v), (_, v2)| OrderedFloat(**v).cmp(&OrderedFloat(**v2)))
+        .max_by(|(_, v), (_, v2)| v.cmp(v2))
         .map(|(i, _)| i)
         .expect(&format!(
             "No best move found in values: {:?} for {} moves",
@@ -92,15 +91,15 @@ fn minmax_simple(
     board: &SimpleBoard,
     depth: i32,
     our_team: bool,
-    mut alpha: f32,
-    mut beta: f32,
+    mut alpha: i32,
+    mut beta: i32,
     heuristic_time: i32,
     return_time: i32,
     timeout: i32,
     parent: &mut TreeNode,
-) -> f32 {
+) -> i32 {
     let start = Instant::now();
-    let mut node = TreeNode::new(0.0);
+    let mut node = TreeNode::new(0);
     if depth == 100 || heuristic_time + return_time >= timeout {
         //info!("Depth {} reached", depth);
         let h = board.heuristic();
@@ -111,27 +110,27 @@ fn minmax_simple(
 
     let mut simulations = board.simulate_move(our_team);
     if our_team {
-        simulations.sort_by_key(|s| OrderedFloat(-s.1.heuristic()));
+        simulations.sort_by_key(|s| -s.1.heuristic());
     } else {
-        simulations.sort_by_key(|s| OrderedFloat(s.1.heuristic()));
+        simulations.sort_by_key(|s| s.1.heuristic());
     }
 
     if let Some(sim) = simulations.first() {
         let h = sim.1.heuristic();
-        if our_team && h == f32::MAX {
+        if our_team && h == i32::MAX {
             //info!("Found max value at depth {}", depth);
-            node.value = f32::MAX;
+            node.value = i32::MAX;
             parent.add_child(node);
-            return f32::MAX;
-        } else if !our_team && h == f32::MIN {
+            return i32::MAX;
+        } else if !our_team && h == i32::MIN {
             //info!("Found min value at depth {}", depth);
-            node.value = f32::MIN;
+            node.value = i32::MIN;
             parent.add_child(node);
-            return f32::MIN;
+            return i32::MIN;
         }
     }
 
-    let mut best_value = if our_team { f32::MIN } else { f32::MAX };
+    let mut best_value = if our_team { i32::MIN } else { i32::MAX };
 
     for (idx, (_, next_board)) in simulations.iter().enumerate() {
         let time_left = timeout - start.elapsed().as_nanos() as i32 - return_time;

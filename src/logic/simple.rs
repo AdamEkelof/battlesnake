@@ -67,7 +67,7 @@ pub struct SimpleBoard {
     pub snakes: Vec<Option<SimpleSnake>>,
     team: [usize; 2],
     opps: [usize; 2],
-    pub stored_heuristic: Cell<Option<f32>>,
+    pub stored_heuristic: Cell<Option<i32>>,
 }
 impl SimpleBoard {
     pub fn from(board: &Board, game_info: &GameInfo) -> Self {
@@ -103,72 +103,72 @@ impl SimpleBoard {
     //     v
     // }
 
-    pub fn heuristic(&self) -> f32 {
+    pub fn heuristic(&self) -> i32 {
         if let Some(v) = self.stored_heuristic.get() {
             //info!("Using stored heuristic: {}", v);
             return v;
         }
         if self.snakes.len() == 0 {
-            self.stored_heuristic.set(Some(0.0));
-            return 0.0;
+            self.stored_heuristic.set(Some(0));
+            return 0;
         }
-        let mut health_value: f32 = 0.0;
-        let mut length_value: f32 = 0.0;
-        let mut death_value: f32 = 0.0;
+        let mut health_value: i32 = 0;
+        let mut length_value: i32 = 0;
+        let mut death_value: i32 = 0;
         let mut dead_snake_count = 0;
         // lägg in så man är 1 längre än motståndare
         for f_idx in self.team {
             if f_idx >= self.snakes.len() {
                 // Index out of range, treat as None
                 dead_snake_count += 1;
-                death_value -= 1.0;
+                death_value -= 1;
             } else {
                 match &self.snakes[f_idx] {
                     Some(snake) => {
-                        length_value += snake.body.len() as f32;
+                        length_value += snake.body.len() as i32;
                         if snake.health < 20 {
-                            health_value -= 20.0 - snake.health as f32;
+                            health_value -= 20 - snake.health;
                         }
                     }
                     None => {
                         //info!("Dead snake in our team");
                         dead_snake_count += 1;
-                        death_value -= 1.0;
+                        death_value -= 1;
                     }
                 }
             }
         }
         if dead_snake_count == 2 {
-            self.stored_heuristic.set(Some(f32::MIN));
+            self.stored_heuristic.set(Some(i32::MIN));
             info!("both snakes dead");
-            return f32::MIN;
+            return i32::MIN;
         }
         dead_snake_count = 0;
         for e_idx in self.opps {
             if e_idx >= self.snakes.len() {
                 // Index out of range, treat as None
                 dead_snake_count += 1;
-                death_value += 1.0;
+                death_value += 1;
             } else {
                 match &self.snakes[e_idx] {
                     Some(snake) => {
-                        length_value -= snake.body.len() as f32;
+                        length_value -= snake.body.len() as i32;
                         if snake.health < 20 {
-                            health_value += 20.0 - snake.health as f32;
+                            health_value += 20 - snake.health;
                         }
                     }
                     None => {
                         dead_snake_count += 1;
-                        death_value += 1.0;
+                        death_value += 1;
                     }
                 }
             }
         }
         if dead_snake_count == 2 {
-            self.stored_heuristic.set(Some(f32::MAX));
-            return f32::MAX;
+            self.stored_heuristic.set(Some(i32::MAX));
+            return i32::MAX;
         }
-        let v = health_value * 0.5 + length_value * 2.0 + death_value * 10.0;
+        let v = health_value * 1 + length_value * 4 + death_value * 20;
         self.stored_heuristic.set(Some(v));
         v
     }
