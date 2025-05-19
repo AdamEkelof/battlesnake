@@ -92,6 +92,16 @@ impl SimpleBoard {
                 enemy_count += 1;
             }
         }
+        while friendly_count < 2 {
+            simple_board.team[friendly_count] = simple_board.snakes.len();
+            simple_board.snakes.push(None);
+            friendly_count += 1;
+        }
+        while enemy_count < 2 {
+            simple_board.opps[enemy_count] = simple_board.snakes.len();
+            simple_board.snakes.push(None);
+            enemy_count += 1;
+        }
         simple_board
     }
 
@@ -113,7 +123,7 @@ impl SimpleBoard {
         else {
             fast_heuristic = self.fast_heuristic();
         }
-        if fast {
+        if fast || fast_heuristic == i32::MIN || fast_heuristic == i32::MAX {
             return fast_heuristic;
         }
         
@@ -250,6 +260,9 @@ impl SimpleBoard {
         }
         let mut visited = [false; 121];
         while let Some((i, coord)) = queue.pop_front() {
+            if coord.x < 0 || coord.x > 10 || coord.y < 0 || coord.y > 10 {
+                continue;
+            }
             let arr_idx = (coord.y * 11 + coord.x) as usize;
             if visited[arr_idx] {
                 continue;
