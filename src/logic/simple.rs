@@ -67,7 +67,8 @@ pub struct SimpleBoard {
     pub snakes: Vec<Option<SimpleSnake>>,
     team: [usize; 2],
     opps: [usize; 2],
-    pub stored_heuristic: Cell<Option<i32>>,
+    pub stored_fast_heuristic: Cell<Option<i32>>,
+    pub stored_flood_fill_heuristic: Cell<Option<i32>>,
 }
 impl SimpleBoard {
     pub fn from(board: &Board, game_info: &GameInfo) -> Self {
@@ -76,7 +77,8 @@ impl SimpleBoard {
             snakes: Vec::new(),
             team: [10; 2],
             opps: [10; 2],
-            stored_heuristic: Cell::new(None),
+            stored_fast_heuristic: Cell::new(None),
+            stored_flood_fill_heuristic: Cell::new(None),
         };
         let mut friendly_count = 0;
         let mut enemy_count = 0;
@@ -103,13 +105,31 @@ impl SimpleBoard {
     //     v
     // }
 
-    pub fn heuristic(&self) -> i32 {
-        if let Some(v) = self.stored_heuristic.get() {
-            //info!("Using stored heuristic: {}", v);
-            return v;
+    pub fn heuristic(&self, fast: bool) -> i32 {
+        let fast_heuristic: i32;
+        if let Some(v) = self.stored_fast_heuristic.get() {
+            fast_heuristic = v;
         }
+        else {
+            fast_heuristic = self.fast_heuristic();
+        }
+        if fast {
+            return fast_heuristic;
+        }
+        
+        let flood_fill_heuristic: i32;
+        if let Some(v) = self.stored_flood_fill_heuristic.get() {
+            flood_fill_heuristic = v;
+        } else {
+            flood_fill_heuristic = self.flood_fill().len() as i32;
+        }
+        
+        return fast_heuristic + flood_fill_heuristic;
+    }
+
+    fn fast_heuristic(&self) -> i32 {
         if self.snakes.len() == 0 {
-            self.stored_heuristic.set(Some(0));
+            self.stored_fast_heuristic.set(Some(0));
             return 0;
         }
         let mut health_value: i32 = 0;
@@ -139,7 +159,7 @@ impl SimpleBoard {
             }
         }
         if dead_snake_count == 2 {
-            self.stored_heuristic.set(Some(i32::MIN));
+            self.stored_fast_heuristic.set(Some(i32::MIN));
             info!("both snakes dead");
             return i32::MIN;
         }
@@ -165,11 +185,52 @@ impl SimpleBoard {
             }
         }
         if dead_snake_count == 2 {
-            self.stored_heuristic.set(Some(i32::MAX));
+            self.stored_fast_heuristic.set(Some(i32::MAX));
             return i32::MAX;
         }
         let v = health_value * 1 + length_value * 8 + death_value * 20;
-        self.stored_heuristic.set(Some(v));
+        self.stored_fast_heuristic.set(Some(v));
+        v
+    }
+
+    fn flood_fill_heuristic(&self) -> i32 {
+        let flood_fill = self.flood_fill();
+        let mut sum_value = 0;
+        let mut danger_value = 0;
+        for f_idx in self.team {
+            if f_idx >= self.snakes.len() {
+                // Index out of range, treat as None
+                continue;
+            }
+            match &self.snakes[f_idx] {
+                Some(snake) => {
+                    let ff_size = flood_fill.get(&f_idx).unwrap().len() as i32;
+                    sum_value += ff_size;
+                    if ff_size < snake.body.len() as i32 {
+                        danger_value -= snake.body.len() as i32 - ff_size;
+                    }
+                }
+                None => {}
+            }
+        }
+        for e_idx in self.opps {
+            if e_idx >= self.snakes.len() {
+                // Index out of range, treat as None
+                continue;
+            }
+            match &self.snakes[e_idx] {
+                Some(snake) => {
+                    let ff_size = flood_fill.get(&e_idx).unwrap().len() as i32;
+                    sum_value -= ff_size;
+                    if ff_size < snake.body.len() as i32 {
+                        danger_value += snake.body.len() as i32 - ff_size;
+                    }
+                }
+                None => {}
+            }
+        }
+        let v = sum_value * 1 + danger_value * 4;
+        self.stored_flood_fill_heuristic.set(Some(v));
         v
     }
 
@@ -208,7 +269,10 @@ impl SimpleBoard {
 
     // This could be using team instead of index and then do the combined moves
     pub fn simulate_move(&self, our_team: bool) -> Vec<([SnakeMove; 2], Self)> {
-        self.stored_heuristic.set(None);
+        // reset stored heuristics since snakes have moved
+        self.stored_fast_heuristic.set(None);
+        self.stored_flood_fill_heuristic.set(None);
+
         let idx = if our_team { self.team } else { self.opps };
         let mut moves = Vec::new();
         let mut alive = [false; 4];
@@ -292,7 +356,7 @@ impl SimpleBoard {
 
             //info!("Simulating move: {:?} -> \n{}", m, next_board);
 
-            next_board.kill_snakes();
+            if !our_team { next_board.kill_snakes(); }
 
             //info!("Killed snakes: \n{}", next_board);
 
@@ -478,6 +542,34 @@ impl SimpleSnake {
         let next_pos = self.next_position(movement);
         let mut any_collision = false;
         let mut dead = false;
+        for idx in simple_board.team {
+            if let Some(snake) = &simple_board.snakes[idx] {
+                if let Some(&pos) = snake.body.back() {
+                    if pos == next_pos {
+                        return (false, false);
+                    }
+                }
+            }
+        }
+        for idx in simple_board.opps {
+            if let Some(snake) = &simple_board.snakes[idx] {
+                if let Some(&pos) = snake.body.back() {
+                    if pos == next_pos {
+                        let head = snake.body.front().unwrap();
+                        for (dx, dy) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
+                            let nx = head.x + dx;
+                            let ny = head.y + dy;
+                            if nx >= 0 && nx < 11 && ny >= 0 && ny < 11 {
+                                let new_coord = Coord { x: nx, y: ny };
+                                if simple_board.food.contains(&new_coord) {
+                                    return (true, true);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         simple_board
             .snakes
             .iter()
@@ -492,7 +584,7 @@ impl SimpleSnake {
                 let collision = s
                     .as_ref()
                     .map_or(false, |snake| snake.body.contains(&next_pos));
-                if collision {
+                if collision{
                     any_collision = true;
                     // Only check length if collision is with the head, otherwise always dead
                     if s.as_ref().unwrap().body[0] == next_pos {

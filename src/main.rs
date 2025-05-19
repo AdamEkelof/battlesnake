@@ -169,7 +169,7 @@ fn handle_end(shared_data: &State<SharedData>, end_req: Json<GameState>) -> Stat
     let mut data = shared_data.lock().unwrap();
     // Check if the game ID already exists
     let game_id = end_req.game.id.clone();
-    if let Some(game_info) = data.get_mut(&game_id) {
+    if let Some(_game_info) = data.get_mut(&game_id) {
         // Remove the game info from shared data
         data.remove(&game_id);
     }

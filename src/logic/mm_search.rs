@@ -65,7 +65,7 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
             best_value,
             i32::MAX,
             1,
-            2,
+            10,
             time,
             &mut root,
         ).0;
@@ -103,7 +103,7 @@ fn minmax_simple(
     let mut node = TreeNode::new(0);
     if depth == 100 || heuristic_time + return_time >= timeout {
         //info!("Depth {} reached", depth);
-        let h = board.heuristic();
+        let h = board.heuristic(false);
         node.value = h;
         parent.add_child(node);
         return (h, depth);
@@ -111,13 +111,13 @@ fn minmax_simple(
 
     let mut simulations = board.simulate_move(our_team);
     if our_team {
-        simulations.sort_by_key(|s| -s.1.heuristic());
+        simulations.sort_by_key(|s| -s.1.heuristic(true));
     } else {
-        simulations.sort_by_key(|s| s.1.heuristic());
+        simulations.sort_by_key(|s| s.1.heuristic(true));
     }
 
     if let Some(sim) = simulations.first() {
-        let h = sim.1.heuristic();
+        let h = sim.1.heuristic(true);
         if our_team && h == i32::MAX {
             //info!("Found max value at depth {}", depth);
             node.value = i32::MAX;
@@ -135,8 +135,8 @@ fn minmax_simple(
 
     for (idx, (_, next_board)) in simulations.iter().enumerate() {
         let time_left = timeout - start.elapsed().as_nanos() as i32 - return_time;
-        if time_left <= 0 {
-            best_value = (simulations.first().unwrap().1.heuristic(), depth+1);
+        if time_left <= heuristic_time {
+            best_value = (simulations.first().unwrap().1.heuristic(false), depth+1);
             break;
         }
 
@@ -182,5 +182,5 @@ fn minmax_simple(
         return best_value;
     }
     let depth_diff = best_value.1 - depth;
-    ((best_value.0 * depth_diff + board.heuristic()) / (depth_diff+1), best_value.1)
+    ((best_value.0 * depth_diff + board.heuristic(true)) / (depth_diff+1), best_value.1)
 }
