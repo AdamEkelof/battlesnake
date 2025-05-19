@@ -168,7 +168,7 @@ impl SimpleBoard {
             self.stored_heuristic.set(Some(i32::MAX));
             return i32::MAX;
         }
-        let v = health_value * 1 + length_value * 4 + death_value * 20;
+        let v = health_value * 1 + length_value * 8 + death_value * 20;
         self.stored_heuristic.set(Some(v));
         v
     }
