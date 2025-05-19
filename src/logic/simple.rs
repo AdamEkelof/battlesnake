@@ -401,8 +401,8 @@ impl SimpleBoard {
         for (i, o_snake) in self.snakes.iter().enumerate() {
             if let Some(snake) = o_snake {
                 if snake.health == 0
-                    || snake.collision_with_snakes(&self, Movement::None).1
                     || simple_out_of_bounds(&snake.body[0], &Movement::None)
+                    || snake.collision_with_snakes(&self, Movement::None)
                 {
                     kill_idxs.push(i);
                     continue;
@@ -477,7 +477,7 @@ impl SimpleSnake {
         }
     }
 
-    fn get_safe_moves(&self, simple_board: &SimpleBoard) -> Vec<Movement> {
+    fn get_safe_moves(&self, simple_board: &SimpleBoard, our_team: bool) -> Vec<Movement> {
         let mut m_v = Movement::all();
         let head = &self.body[0];
         let neck = &self.body[1];
@@ -506,11 +506,10 @@ impl SimpleSnake {
             let idx = m_v.iter().position(|m| matches!(m, Movement::Up)).unwrap();
             m_v.remove(idx);
         }
-
+        
         m_v.retain(|&m| {
             !simple_out_of_bounds(&head, &m)
-                && !self.collision_with_body(m)
-                && !self.collision_with_snakes(simple_board, m).0
+                && (if our_team { !self.team_collision(simple_board, m) } else { !self.opps_collision(simple_board, m) })
         });
 
         m_v
@@ -544,22 +543,17 @@ impl SimpleSnake {
         self.body.iter().any(|b| b == &next_pos)
     }
 
-    /// Checks if the head of the snake is intersecting the body of another snake.
-    /// Returns two bools, collision check and death check respectively.
-    /// TODO: maybe only collisions that kill are interesting to report...
-    fn collision_with_snakes(
+    fn team_collision(
         &self,
         simple_board: &SimpleBoard,
         movement: Movement,
-    ) -> (bool, bool) {
+    ) -> bool {
         let next_pos = self.next_position(movement);
-        let mut any_collision = false;
-        let mut dead = false;
         for idx in simple_board.team {
             if let Some(snake) = &simple_board.snakes[idx] {
                 if let Some(&pos) = snake.body.back() {
                     if pos == next_pos {
-                        return (false, false);
+                        return false;
                     }
                 }
             }
@@ -575,7 +569,7 @@ impl SimpleSnake {
                             if nx >= 0 && nx < 11 && ny >= 0 && ny < 11 {
                                 let new_coord = Coord { x: nx, y: ny };
                                 if simple_board.food.contains(&new_coord) {
-                                    return (true, true);
+                                    return true;
                                 }
                             }
                         }
@@ -583,22 +577,16 @@ impl SimpleSnake {
                 }
             }
         }
+        let mut dead = false;
         simple_board
             .snakes
             .iter()
-            .filter(|s| {
-                if let Some(snake) = s {
-                    snake != self
-                } else {
-                    false
-                }
-            })
+            .filter(|s| s.is_some())
             .for_each(|s| {
                 let collision = s
                     .as_ref()
                     .map_or(false, |snake| snake.body.contains(&next_pos));
                 if collision{
-                    any_collision = true;
                     // Only check length if collision is with the head, otherwise always dead
                     if s.as_ref().unwrap().body[0] == next_pos {
                         if s.as_ref().unwrap().body.len() >= self.body.len() {
@@ -609,7 +597,120 @@ impl SimpleSnake {
                     }
                 }
             });
-        (any_collision, dead)
+        dead
+    }
+
+    /// Checks if the head of the snake is intersecting the body of another snake.
+    /// Returns two bools, collision check and death check respectively.
+    /// TODO: maybe only collisions that kill are interesting to report...
+    fn opps_collision (
+        &self,
+        simple_board: &SimpleBoard,
+        movement: Movement,
+    ) -> bool {
+        let next_pos = self.next_position(movement);
+        let mut any_collision = false;
+        let mut dead = false;
+        for idx in simple_board.team {
+            if let Some(snake) = &simple_board.snakes[idx] {
+                if let Some(&pos) = snake.body.back() {
+                    if pos == next_pos {
+                        return false;
+                    }
+                }
+            }
+        }
+        for idx in simple_board.opps {
+            if let Some(snake) = &simple_board.snakes[idx] {
+                if let Some(&pos) = snake.body.back() {
+                    if pos == next_pos {
+                        let head = snake.body.front().unwrap();
+                        for (dx, dy) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
+                            let nx = head.x + dx;
+                            let ny = head.y + dy;
+                            if nx >= 0 && nx < 11 && ny >= 0 && ny < 11 {
+                                let new_coord = Coord { x: nx, y: ny };
+                                if simple_board.food.contains(&new_coord) {
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+        for s in simple_board.snakes.iter().filter(|s| s.is_some()) {
+            let collision = s
+                .as_ref()
+                .map_or(false, |snake| snake.body.contains(&next_pos));
+            if collision{
+                // Only check length if collision is with the head, otherwise always dead
+                if s.as_ref().unwrap().body[0] == next_pos {
+                    if s.as_ref().unwrap().body.len() >= self.body.len() {
+                        return true;
+                    }
+                } else {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    fn collision_with_snakes (
+        &self,
+        simple_board: &SimpleBoard,
+        movement: Movement,
+    ) -> bool {
+        let next_pos = self.next_position(movement);
+        let mut any_collision = false;
+        let mut dead = false;
+        for idx in simple_board.team {
+            if let Some(snake) = &simple_board.snakes[idx] {
+                if let Some(&pos) = snake.body.back() {
+                    if pos == next_pos {
+                        return false;
+                    }
+                }
+            }
+        }
+        for idx in simple_board.opps {
+            if let Some(snake) = &simple_board.snakes[idx] {
+                if let Some(&pos) = snake.body.back() {
+                    if pos == next_pos {
+                        let head = snake.body.front().unwrap();
+                        for (dx, dy) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
+                            let nx = head.x + dx;
+                            let ny = head.y + dy;
+                            if nx >= 0 && nx < 11 && ny >= 0 && ny < 11 {
+                                let new_coord = Coord { x: nx, y: ny };
+                                if simple_board.food.contains(&new_coord) {
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+        for s in simple_board.snakes.iter().filter(|s| s.is_some()) {
+            let collision = s
+                .as_ref()
+                .map_or(false, |snake| snake.body.contains(&next_pos));
+            if collision{
+                // Only check length if collision is with the head, otherwise always dead
+                if s.as_ref().unwrap().body[0] == next_pos {
+                    if s.as_ref().unwrap().body.len() >= self.body.len() {
+                        return true;
+                    }
+                } else {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
 
@@ -619,6 +720,6 @@ fn simple_out_of_bounds(coord: &Coord, movement: &Movement) -> bool {
         Movement::Down => coord.y == 0,
         Movement::Left => coord.x == 0,
         Movement::Right => coord.x == 10,
-        Movement::None => false,
+        Movement::None => coord.x < 0 || coord.x > 10 || coord.y < 0 || coord.y > 10,
     }
 }
