@@ -69,7 +69,8 @@ pub fn search(board: &Board, game_info: &GameInfo) -> [SnakeMove; 2] {
             time,
             &mut root,
         );
-        root.print(format!("{:?}:", move_pair), true);
+        //root.print(format!("{:?}:", move_pair), true);
+        info!("Move {:?} value: {}", move_pair, value);
         best_value = best_value.max(value);
         values.push(value);
         moves.push(move_pair);
