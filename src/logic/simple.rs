@@ -8,7 +8,7 @@ use std::cell::Cell;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::{Debug, Display};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Movement {
     Up,
     Down,
@@ -16,9 +16,35 @@ pub enum Movement {
     Right,
     None,
 }
+
 impl Movement {
     pub fn all() -> Vec<Movement> {
         vec![Self::Up, Self::Down, Self::Left, Self::Right]
+    }
+}
+
+// Implement custom ordering: Up < Down < Left < Right < None
+impl Ord for Movement {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.to_order().cmp(&other.to_order())
+    }
+}
+
+impl PartialOrd for Movement {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Movement {
+    fn to_order(&self) -> u8 {
+        match self {
+            Movement::Up => 0,
+            Movement::Down => 1,
+            Movement::Left => 2,
+            Movement::Right => 3,
+            Movement::None => 4,
+        }
     }
 }
 impl Display for Movement {
@@ -290,14 +316,9 @@ impl SimpleBoard {
         let mut moves = Vec::new();
         let mut alive = [false; 4];
         for i in idx {
-            if i >= self.snakes.len() { 
-                moves.push(vec![SnakeMove {
-                    id: i,
-                    mv: Movement::Down,
-                }]);
-            } else if let Some(snake) = &self.snakes[i] {
+            if let Some(snake) = &self.snakes[i] {
                 alive[i] = true;
-                let mut m = snake.get_safe_moves(self);
+                let mut m = snake.get_safe_moves(self, our_team);
                 if m.len() == 0 {
                     m.push(Movement::Down);
                 }
@@ -318,7 +339,7 @@ impl SimpleBoard {
         let team_moves: Vec<[SnakeMove; 2]> = cartesian_move(&moves[0], &moves[1]).collect();
         for m in team_moves {
             let next_pos = [
-                if idx[0] <= alive.len() && alive[idx[0]] {
+                if alive[idx[0]] {
                     self.snakes[idx[0]]
                         .as_ref()
                         .unwrap()
@@ -326,7 +347,7 @@ impl SimpleBoard {
                 } else {
                     Coord { x: -2, y: -1 }
                 },
-                if idx[1] <= alive.len() && alive[idx[1]] {
+                if alive[idx[1]] {
                     self.snakes[idx[1]]
                         .as_ref()
                         .unwrap()
@@ -340,7 +361,7 @@ impl SimpleBoard {
             }
 
             let mut next_board = self.clone();
-            if idx[0] <= alive.len() && alive[idx[0]] {
+            if alive[idx[0]] {
                 next_board.snakes[idx[0]]
                     .as_mut()
                     .unwrap()
@@ -350,8 +371,9 @@ impl SimpleBoard {
                 if !next_board.food.contains(&next_pos[0]) {
                     next_board.snakes[idx[0]].as_mut().unwrap().body.pop_back();
                 }
+                next_board.snakes[idx[0]].as_mut().unwrap().health -= 1;
             }
-            if idx[1] <= alive.len() && alive[idx[1]] {
+            if alive[idx[1]] {
                 next_board.snakes[idx[1]]
                     .as_mut()
                     .unwrap()
@@ -361,6 +383,7 @@ impl SimpleBoard {
                 if !next_board.food.contains(&next_pos[1]) {
                     next_board.snakes[idx[1]].as_mut().unwrap().body.pop_back();
                 }
+                next_board.snakes[idx[1]].as_mut().unwrap().health -= 1;
             }
 
             next_board
@@ -402,7 +425,7 @@ impl SimpleBoard {
             if let Some(snake) = o_snake {
                 if snake.health == 0
                     || simple_out_of_bounds(&snake.body[0], &Movement::None)
-                    || snake.collision_with_snakes(&self, Movement::None)
+                    || snake.collision_with_snakes(&self)
                 {
                     kill_idxs.push(i);
                     continue;
@@ -480,31 +503,24 @@ impl SimpleSnake {
     fn get_safe_moves(&self, simple_board: &SimpleBoard, our_team: bool) -> Vec<Movement> {
         let mut m_v = Movement::all();
         let head = &self.body[0];
-        let neck = &self.body[1];
-        if neck.x < head.x {
-            let idx = m_v
-                .iter()
-                .position(|m| matches!(m, Movement::Left))
-                .unwrap();
-            m_v.remove(idx);
-        }
-        if neck.x > head.x {
-            let idx = m_v
-                .iter()
-                .position(|m| matches!(m, Movement::Right))
-                .unwrap();
-            m_v.remove(idx);
-        }
-        if neck.y < head.y {
-            let idx = m_v
-                .iter()
-                .position(|m| matches!(m, Movement::Down))
-                .unwrap();
-            m_v.remove(idx);
-        }
-        if neck.y > head.y {
-            let idx = m_v.iter().position(|m| matches!(m, Movement::Up)).unwrap();
-            m_v.remove(idx);
+        if self.body.len() > 1 {
+            let neck = &self.body[1];
+            if neck.x < head.x {
+                let idx = m_v.iter().position(|m| matches!(m, Movement::Left)).unwrap();
+                m_v.remove(idx);
+            }
+            if neck.x > head.x {
+                let idx = m_v.iter().position(|m| matches!(m, Movement::Right)).unwrap();
+                m_v.remove(idx);
+            }
+            if neck.y < head.y {
+                let idx = m_v.iter().position(|m| matches!(m, Movement::Down)).unwrap();
+                m_v.remove(idx);
+            }
+            if neck.y > head.y {
+                let idx = m_v.iter().position(|m| matches!(m, Movement::Up)).unwrap();
+                m_v.remove(idx);
+            }
         }
         
         m_v.retain(|&m| {
@@ -573,37 +589,24 @@ impl SimpleSnake {
                                 }
                             }
                         }
+                        return false;
                     }
                 }
             }
         }
-        let mut dead = false;
-        simple_board
-            .snakes
-            .iter()
-            .filter(|s| s.is_some())
-            .for_each(|s| {
-                let collision = s
-                    .as_ref()
-                    .map_or(false, |snake| snake.body.contains(&next_pos));
-                if collision{
-                    // Only check length if collision is with the head, otherwise always dead
-                    if s.as_ref().unwrap().body[0] == next_pos {
-                        if s.as_ref().unwrap().body.len() >= self.body.len() {
-                            dead = true;
-                        }
-                    } else {
-                        dead = true;
-                    }
-                }
-            });
-        dead
-    }
 
-    /// Checks if the head of the snake is intersecting the body of another snake.
-    /// Returns two bools, collision check and death check respectively.
-    /// TODO: maybe only collisions that kill are interesting to report...
-    fn opps_collision (
+        for s in simple_board.snakes.iter().filter(|s| s.is_some()) {
+            let collision = s
+                .as_ref()
+                .map_or(false, |snake| snake.body.contains(&next_pos));
+            if collision {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    fn opps_collision(
         &self,
         simple_board: &SimpleBoard,
         movement: Movement,
@@ -611,30 +614,10 @@ impl SimpleSnake {
         let next_pos = self.next_position(movement);
         let mut any_collision = false;
         let mut dead = false;
-        for idx in simple_board.team {
-            if let Some(snake) = &simple_board.snakes[idx] {
-                if let Some(&pos) = snake.body.back() {
-                    if pos == next_pos {
-                        return false;
-                    }
-                }
-            }
-        }
         for idx in simple_board.opps {
             if let Some(snake) = &simple_board.snakes[idx] {
                 if let Some(&pos) = snake.body.back() {
                     if pos == next_pos {
-                        let head = snake.body.front().unwrap();
-                        for (dx, dy) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
-                            let nx = head.x + dx;
-                            let ny = head.y + dy;
-                            if nx >= 0 && nx < 11 && ny >= 0 && ny < 11 {
-                                let new_coord = Coord { x: nx, y: ny };
-                                if simple_board.food.contains(&new_coord) {
-                                    return true;
-                                }
-                            }
-                        }
                         return false;
                     }
                 }
@@ -646,10 +629,11 @@ impl SimpleSnake {
                 .map_or(false, |snake| snake.body.contains(&next_pos));
             if collision{
                 // Only check length if collision is with the head, otherwise always dead
-                if s.as_ref().unwrap().body[0] == next_pos {
+                if s.as_ref().unwrap().body.front().unwrap() == &next_pos {
                     if s.as_ref().unwrap().body.len() >= self.body.len() {
                         return true;
                     }
+                    return false;
                 } else {
                     return true;
                 }
@@ -661,50 +645,25 @@ impl SimpleSnake {
     fn collision_with_snakes (
         &self,
         simple_board: &SimpleBoard,
-        movement: Movement,
     ) -> bool {
-        let next_pos = self.next_position(movement);
-        let mut any_collision = false;
-        let mut dead = false;
-        for idx in simple_board.team {
-            if let Some(snake) = &simple_board.snakes[idx] {
-                if let Some(&pos) = snake.body.back() {
-                    if pos == next_pos {
-                        return false;
-                    }
-                }
-            }
-        }
-        for idx in simple_board.opps {
-            if let Some(snake) = &simple_board.snakes[idx] {
-                if let Some(&pos) = snake.body.back() {
-                    if pos == next_pos {
-                        let head = snake.body.front().unwrap();
-                        for (dx, dy) in [(0, 1), (1, 0), (0, -1), (-1, 0)] {
-                            let nx = head.x + dx;
-                            let ny = head.y + dy;
-                            if nx >= 0 && nx < 11 && ny >= 0 && ny < 11 {
-                                let new_coord = Coord { x: nx, y: ny };
-                                if simple_board.food.contains(&new_coord) {
-                                    return true;
-                                }
-                            }
-                        }
-                        return false;
-                    }
-                }
-            }
-        }
+        let head = self.body.front().unwrap();
+
         for s in simple_board.snakes.iter().filter(|s| s.is_some()) {
             let collision = s
                 .as_ref()
-                .map_or(false, |snake| snake.body.contains(&next_pos));
-            if collision{
+                .map_or(false, |snake| snake.body.contains(&head));
+            if collision {
                 // Only check length if collision is with the head, otherwise always dead
-                if s.as_ref().unwrap().body[0] == next_pos {
-                    if s.as_ref().unwrap().body.len() >= self.body.len() {
+                let snek = s.as_ref().unwrap(); 
+                if snek.body.front().unwrap() == head {
+                    // If the head is also present elsewhere in the body (shouldn't happen in normal play, but check)
+                    if snek == self && !snek.body.iter().skip(1).any(|pos| pos == head) {
+                        continue;
+                    }
+                    if snek.body.len() >= self.body.len() {
                         return true;
                     }
+                    return false;
                 } else {
                     return true;
                 }
@@ -721,5 +680,466 @@ fn simple_out_of_bounds(coord: &Coord, movement: &Movement) -> bool {
         Movement::Left => coord.x == 0,
         Movement::Right => coord.x == 10,
         Movement::None => coord.x < 0 || coord.x > 10 || coord.y < 0 || coord.y > 10,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+    use crate::{Coord, Movement};
+    use super::{SimpleBoard, SimpleSnake};
+
+    fn create_snake_at(body: Vec<Coord>, health: i32) -> SimpleSnake {
+        let mut body_deque = VecDeque::new();
+        for coord in body {
+            body_deque.push_back(coord);
+        }
+        SimpleSnake {
+            health,
+            body: body_deque,
+        }
+    }
+
+    fn basic_board_with_snake(snake: SimpleSnake) -> SimpleBoard {
+        SimpleBoard {
+            food: vec![],
+            snakes: vec![Some(snake), None, None, None],
+            team: [0, 1],
+            opps: [2, 3],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        }
+    }
+
+    #[test]
+    fn test_no_moves_out_of_bounds() {
+        // Snake is at (0,0) with neck at (0,1), only RIGHT is possible
+        let snake = create_snake_at(
+            vec![Coord { x: 0, y: 0 }, Coord { x: 0, y: 1 }],
+            100,
+        );
+        let board = basic_board_with_snake(snake.clone());
+
+        let moves = snake.get_safe_moves(&board, true);
+        assert_eq!(moves, vec![Movement::Right]);
+    }
+
+    #[test]
+    fn test_own_tail() {
+        // Snake is in a tight U shape; only Right is safe (moving to tail)
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 1, y: 1 }, // head
+                Coord { x: 1, y: 2 }, // neck
+                Coord { x: 0, y: 2 },
+                Coord { x: 0, y: 1 },
+                Coord { x: 0, y: 0 },
+                Coord { x: 1, y: 0 },
+                Coord { x: 2, y: 0 },
+                Coord { x: 2, y: 1 },
+            ],
+            100,
+        );
+        
+        let board = basic_board_with_snake(snake.clone());
+        println!("Board: \n{}\n", board);
+
+        let moves = snake.get_safe_moves(&board, true);
+        assert_eq!(moves, vec![Movement::Right]);
+    }
+
+    #[test]
+    fn test_all_directions_safe() {
+        // Snake is in center with no obstacles
+        let snake = create_snake_at(
+            vec![Coord { x: 5, y: 5 }],
+            100,
+        );
+        let board = basic_board_with_snake(snake.clone());
+
+        let mut moves = snake.get_safe_moves(&board, true);
+        moves.sort();
+        let mut expected = vec![Movement::Up, Movement::Down, Movement::Left, Movement::Right];
+        expected.sort();
+        assert_eq!(moves, expected);
+    }
+
+    #[test]
+    fn test_enemy_collision_blocked() {
+        // Snake near enemy that blocks the right
+        let mut snake = create_snake_at(
+            vec![Coord { x: 5, y: 5 }, Coord { x: 5, y: 4 }],
+            100,
+        );
+        let enemy_snake = create_snake_at(
+            vec![Coord { x: 6, y: 5 }, Coord { x: 6, y: 4 }],
+            100,
+        );
+
+        let board = SimpleBoard {
+            food: vec![],
+            snakes: vec![Some(snake.clone()), Some(enemy_snake), None, None],
+            team: [0, 2],
+            opps: [1, 3],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+
+        let mut moves = snake.get_safe_moves(&board, true);
+        moves.sort();
+        let mut expected = vec![Movement::Up, Movement::Left];
+        expected.sort();
+        assert_eq!(moves, expected);
+    }
+
+    #[test]
+    fn test_team_tail() {
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 1, y: 1 }, // head
+                Coord { x: 1, y: 2 }, // neck
+                Coord { x: 0, y: 2 },
+                Coord { x: 0, y: 1 },
+            ],
+            100,
+        );
+        let teammate = create_snake_at(
+            vec![
+                Coord { x: 3, y: 1 }, // head
+                Coord { x: 3, y: 2 }, // neck
+                Coord { x: 2, y: 2 },
+                Coord { x: 2, y: 1 },
+            ],
+            100,
+        );
+        
+        let board = SimpleBoard {
+            food: vec![],
+            snakes: vec![Some(snake.clone()), Some(teammate), None, None],
+            team: [0, 1],
+            opps: [2, 3],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+        println!("Board: \n{}\n", board);
+
+        let mut moves = snake.get_safe_moves(&board, true);
+        moves.sort();
+        assert_eq!(moves, vec![Movement::Down, Movement::Left, Movement::Right]);
+    }
+
+    
+    #[test]
+    fn test_enemy_tail() {
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 1, y: 1 }, // head
+                Coord { x: 1, y: 0 }, // neck
+                Coord { x: 0, y: 0 },
+            ],
+            100,
+        );
+        let enemy1 = create_snake_at(
+            vec![
+                Coord { x: 3, y: 1 }, // head
+                Coord { x: 3, y: 2 }, // neck
+                Coord { x: 2, y: 2 },
+                Coord { x: 2, y: 1 },
+            ],
+            100,
+        );
+        let enemy2 = create_snake_at(
+            vec![
+                Coord { x: 0, y: 4 }, // head
+                Coord { x: 0, y: 3 }, // neck
+                Coord { x: 0, y: 2 },
+                Coord { x: 0, y: 1 },
+            ],
+            100,
+        );
+        
+        let board = SimpleBoard {
+            food: vec![Coord { x: 0, y: 5 }],
+            snakes: vec![Some(snake.clone()), Some(enemy1), Some(enemy2), None],
+            team: [0, 3],
+            opps: [1, 2],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+        println!("Board: \n{}\n", board);
+
+        let mut moves = snake.get_safe_moves(&board, true);
+        moves.sort();
+        assert_eq!(moves, vec![Movement::Up, Movement::Right]);
+    }
+
+    #[test]
+    fn test_team_tail_opps() {
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 1, y: 1 }, // head
+                Coord { x: 1, y: 2 }, // neck
+                Coord { x: 0, y: 2 },
+                Coord { x: 0, y: 1 },
+            ],
+            100,
+        );
+        let teammate = create_snake_at(
+            vec![
+                Coord { x: 3, y: 1 }, // head
+                Coord { x: 3, y: 2 }, // neck
+                Coord { x: 2, y: 2 },
+                Coord { x: 2, y: 1 },
+            ],
+            100,
+        );
+        
+        let board = SimpleBoard {
+            food: vec![],
+            snakes: vec![Some(snake.clone()), Some(teammate), None, None],
+            team: [2, 3],
+            opps: [0, 1],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+        println!("Board: \n{}\n", board);
+
+        let mut moves = snake.get_safe_moves(&board, false);
+        moves.sort();
+        assert_eq!(moves, vec![Movement::Down, Movement::Left, Movement::Right]);
+    }
+
+    
+    #[test]
+    fn test_enemy_tail_opps() {
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 1, y: 1 }, // head
+                Coord { x: 1, y: 0 }, // neck
+                Coord { x: 0, y: 0 },
+            ],
+            100,
+        );
+        let enemy1 = create_snake_at(
+            vec![
+                Coord { x: 3, y: 1 }, // head
+                Coord { x: 3, y: 2 }, // neck
+                Coord { x: 2, y: 2 },
+                Coord { x: 2, y: 1 },
+            ],
+            100,
+        );
+        let enemy2 = create_snake_at(
+            vec![
+                Coord { x: 0, y: 4 }, // head
+                Coord { x: 0, y: 3 }, // neck
+                Coord { x: 0, y: 2 },
+                Coord { x: 0, y: 1 },
+            ],
+            100,
+        );
+        
+        let board = SimpleBoard {
+            food: vec![Coord { x: 0, y: 5 }],
+            snakes: vec![Some(snake.clone()), Some(enemy1), Some(enemy2), None],
+            team: [1, 2],
+            opps: [0, 3],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+        println!("Board: \n{}\n", board);
+
+        let mut moves = snake.get_safe_moves(&board, false);
+        moves.sort();
+        assert_eq!(moves, vec![Movement::Up]);
+    }
+
+    #[test]
+    fn test_head() {
+        let enemy = create_snake_at(
+            vec![
+                Coord { x: 8, y: 8 }, // head
+                Coord { x: 9, y: 8 }, // neck
+                Coord { x: 10, y: 8 },
+            ],
+            100,
+        );
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 7, y: 8 }, // head
+                Coord { x: 6, y: 8 }, // neck
+                Coord { x: 5, y: 8 },
+                Coord { x: 4, y: 8 },
+            ],
+            100,
+        );
+        
+        let board = SimpleBoard {
+            food: vec![],
+            snakes: vec![Some(snake.clone()), Some(enemy), None, None],
+            team: [0, 3],
+            opps: [1, 2],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+        println!("Board: \n{}\n", board);
+
+        let mut moves = snake.get_safe_moves(&board, true);
+        moves.sort();
+        assert_eq!(moves, vec![Movement::Up, Movement::Down]);
+    }
+
+    #[test]
+    fn test_head_opps_longer() {
+        let enemy = create_snake_at(
+            vec![
+                Coord { x: 8, y: 8 }, // head
+                Coord { x: 9, y: 8 }, // neck
+                Coord { x: 10, y: 8 },
+            ],
+            100,
+        );
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 7, y: 8 }, // head
+                Coord { x: 6, y: 8 }, // neck
+                Coord { x: 5, y: 8 },
+                Coord { x: 4, y: 8 },
+            ],
+            100,
+        );
+        
+        let board = SimpleBoard {
+            food: vec![],
+            snakes: vec![Some(snake.clone()), Some(enemy), None, None],
+            team: [1, 3],
+            opps: [0, 2],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+        println!("Board: \n{}\n", board);
+
+        let mut moves = snake.get_safe_moves(&board, false);
+        moves.sort();
+        assert_eq!(moves, vec![Movement::Up, Movement::Down, Movement::Right]);
+    }
+
+    #[test]
+    fn test_head_opps_shorter() {
+        let enemy = create_snake_at(
+            vec![
+                Coord { x: 8, y: 8 }, // head
+                Coord { x: 9, y: 8 }, // neck
+                Coord { x: 10, y: 8 },
+            ],
+            100,
+        );
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 7, y: 8 }, // head
+                Coord { x: 6, y: 8 }, // neck
+                Coord { x: 5, y: 8 },
+                Coord { x: 4, y: 8 },
+            ],
+            100,
+        );
+        
+        let board = SimpleBoard {
+            food: vec![],
+            snakes: vec![Some(snake), Some(enemy.clone()), None, None],
+            team: [0, 3],
+            opps: [1, 2],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+        println!("Board: \n{}\n", board);
+
+        let mut moves = enemy.get_safe_moves(&board, false);
+        moves.sort();
+        assert_eq!(moves, vec![Movement::Up, Movement::Down]);
+    }
+
+    #[test]
+    fn test_snakes_survive() {
+        let snake1 = create_snake_at(vec![Coord { x: 1, y: 1 }], 100);
+        let snake2 = create_snake_at(vec![Coord { x: 9, y: 1 }], 100);
+        let snake3 = create_snake_at(vec![Coord { x: 9, y: 9 }], 100);
+        let snake4 = create_snake_at(vec![Coord { x: 1, y: 9 }], 100);
+
+        let board = SimpleBoard {
+            food: vec![],
+            snakes: vec![
+                Some(snake1),
+                Some(snake2),
+                Some(snake3),
+                Some(snake4),
+            ],
+            team: [0, 1],
+            opps: [2, 3],
+            stored_fast_heuristic: std::cell::Cell::new(None),
+            stored_flood_fill_heuristic: std::cell::Cell::new(None),
+        };
+        println!("Board: \n{}\n", board);
+
+        let sims1 = board.simulate_move(true);
+        for (moves, next_board) in &sims1 {
+            println!("Moves: {:?}, Board: \n{}\n", moves, next_board);
+        }
+        let board1 = sims1[0].1.clone();
+        println!("Board: \n{}\n", board1);
+        let sims2 = board1.simulate_move(false)[0].1.clone();
+        let board2 = sims2.simulate_move(true)[0].1.clone();
+        println!("Board: \n{}\n", board2);
+
+        // Assert that all snakes are alive
+        assert!(board2.snakes.iter().all(|s| s.is_some()));
+    }
+
+    #[test]
+    fn test_snake_death_health() {
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 1, y: 1 }, // head
+                Coord { x: 1, y: 2 }, // neck
+                Coord { x: 0, y: 2 },
+                Coord { x: 0, y: 1 },
+            ],
+            1,
+        );
+        let board = basic_board_with_snake(snake.clone());
+        println!("Board: \n{}\n", board);
+
+        let simulations = board.simulate_move(true);
+        let sim2 = simulations[0].1.simulate_move(false);
+
+        // Assert that all snakes are None (dead)
+        assert!(sim2[0].1.snakes.iter().all(|s| s.is_none()));
+    }
+
+    #[test]
+    fn test_die_to_self() {
+        let snake = create_snake_at(
+            vec![
+                Coord { x: 1, y: 1 }, // head
+                Coord { x: 1, y: 2 }, // neck
+                Coord { x: 0, y: 2 },
+                Coord { x: 0, y: 1 },
+                Coord { x: 0, y: 0 },
+                Coord { x: 1, y: 0 },
+                Coord { x: 2, y: 0 },
+                Coord { x: 2, y: 1 },
+                Coord { x: 2, y: 2 },
+            ],
+            100,
+        );
+        let board = basic_board_with_snake(snake.clone());
+        println!("Board: \n{}\n", board);
+
+        let simulations = board.simulate_move(true);
+        let sim2 = simulations[0].1.simulate_move(false);
+        println!("Board: \n{}\n", sim2[0].1);
+
+        // Assert that all snakes are None (dead)
+        assert!(sim2[0].1.snakes.iter().all(|s| s.is_none()));
     }
 }
